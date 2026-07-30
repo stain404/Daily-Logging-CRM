@@ -20,6 +20,12 @@ const notifRoutes  = require('./routes/notifications');
 
 const app = express();
 
+// Hosted behind a single reverse proxy (Render/Railway) — without this,
+// req.ip is the proxy's address and every user shares one rate-limit bucket.
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // ── Security & middleware ─────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
