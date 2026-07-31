@@ -17,8 +17,8 @@ set -euo pipefail
 # ── Edit these four ──────────────────────────────────────────────────
 BUCKET="alquba-crm-files"                       # must be globally unique
 REGION="us-east-1"                              # same region for S3 and SES
-DOMAIN="yourcompany.com"                        # the sending domain you own
-APP_URL="https://your-service.onrender.com"     # exact Render URL, no trailing slash
+DOMAIN="alqubainvestment.com"                        # the sending domain you own
+APP_URL="https://daily-logging-crm.onrender.com/"     # exact Render URL, no trailing slash
 # ─────────────────────────────────────────────────────────────────────
 
 # Refuse to run against the placeholders. Creating an SES identity for a
@@ -30,11 +30,24 @@ case "$APP_URL" in
   https://your-service.onrender.com|"") echo "Edit APP_URL above — it is still the placeholder." >&2; exit 1;;
 esac
 
+# A browser's Origin header never carries a trailing slash, so an
+# AllowedOrigins entry with one matches nothing and every upload fails CORS.
+APP_URL="${APP_URL%/}"
+
 IAM_USER="taskflow-app"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+
+# The AWS CLI on Windows is a native .exe and cannot resolve Git Bash's POSIX
+# paths — file:///tmp/... is meaningless to it, since /tmp only exists inside
+# MSYS. cygpath -m converts to a Windows path with forward slashes, which is
+# what a file:// URL needs. On Linux/macOS there is no cygpath and the path is
+# already correct, so this passes through untouched.
+winpath() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
+}
 
 # ── Find the AWS CLI ─────────────────────────────────────────────────
 # Two Windows traps this walks around:
@@ -127,7 +140,7 @@ cat > "$TMP/cors.json" <<JSON
   }]
 }
 JSON
-aws s3api put-bucket-cors --bucket "$BUCKET" --cors-configuration "file://$TMP/cors.json"
+aws s3api put-bucket-cors --bucket "$BUCKET" --cors-configuration "file://$(winpath "$TMP/cors.json")"
 echo "     done (localhost:5000 included so local dev works too)"
 
 # ── 4. IAM user ──────────────────────────────────────────────────────
@@ -159,7 +172,7 @@ cat > "$TMP/policy.json" <<JSON
 }
 JSON
 aws iam put-user-policy --user-name "$IAM_USER" \
-  --policy-name taskflow-s3-ses --policy-document "file://$TMP/policy.json"
+  --policy-name taskflow-s3-ses --policy-document "file://$(winpath "$TMP/policy.json")"
 echo "     policy attached"
 
 # An access key is only readable at creation. If one already exists, this
