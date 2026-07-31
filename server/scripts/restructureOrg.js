@@ -181,15 +181,28 @@ const pad = (s, n) => String(s ?? '').padEnd(n);
   // ── Teams ───────────────────────────────────────────────────────────
   // Re-pointed at the manager's new department rather than deleted, so the
   // reporting lines notify.js walks stay intact.
-  console.log('\nTEAMS (preserved, re-pointed to their manager\'s department)');
+  console.log('\nTEAMS');
   const teams = await Team.find().populate('manager', 'username');
   for (const t of teams) {
     const mgrRow = t.manager && ROSTER.find(r => r[0] === t.manager.username);
     const target = mgrRow ? mgrRow[4] : null;
-    console.log(`  ${pad(t.name, 14)} -> ${target || '(manager not in roster — left as is)'}`);
-    if (APPLY && target && deptMap[target]) {
-      await Team.updateOne({ _id: t._id }, { department: deptMap[target] });
+
+    if (target) {
+      console.log(`  keep   ${pad(t.name, 14)} -> ${target}`);
+      if (APPLY && deptMap[target]) {
+        await Team.updateOne({ _id: t._id }, { department: deptMap[target] });
+      }
+      continue;
     }
+
+    // The manager is not in the roster, which means they are being deleted.
+    // Leaving the team behind would point it at a user that no longer exists,
+    // and a dangling manager silently breaks supervisorsOf() — submissions
+    // would stop reaching anyone. A team with no manager is not recoverable
+    // state, so it goes with them.
+    const orphan = !t.manager;
+    console.log(`  \x1b[31mdelete\x1b[0m ${pad(t.name, 14)} (${orphan ? 'no manager' : 'manager ' + t.manager.username + ' is being removed'})`);
+    if (APPLY) await Team.deleteOne({ _id: t._id });
   }
 
   if (APPLY) {
