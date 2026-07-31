@@ -154,4 +154,29 @@ async function taskReviewed(task, actor, actorName, action) {
   return Promise.all([inApp, email]);
 }
 
-module.exports = { notify, supervisorsOf, ceos, taskAssigned, taskSubmitted, taskReviewed };
+// Someone shared a file. In-app only: an email carrying a link to a file the
+// recipient must log in to fetch adds little, and file sharing is the one
+// event here with no deadline attached to it.
+async function fileShared(attachment, actor, actorName) {
+  const isTask = attachment.kind === 'task-attachment';
+
+  // A task attachment is addressed to the review chain rather than to named
+  // people, so recipients is empty and we resolve them the same way a
+  // submission does.
+  const recipients = isTask && !attachment.recipients?.length
+    ? await supervisorsOf(actor)
+    : (attachment.recipients || []);
+
+  return notify(recipients, {
+    type: 'file-shared',
+    title: isTask ? 'File attached to a task' : 'A file was sent to you',
+    message: `${actorName} shared "${attachment.filename}"${
+      attachment.note ? ` — ${attachment.note}` : ''
+    }.`,
+    task: attachment.task || undefined,
+    actor,
+    severity: 'info',
+  });
+}
+
+module.exports = { notify, supervisorsOf, ceos, taskAssigned, taskSubmitted, taskReviewed, fileShared };

@@ -1289,6 +1289,31 @@
     .sw input:disabled ~ .sw-track { opacity: .55; }
     .sw input:disabled ~ .sw-thumb { opacity: .55; }
 
+    /* ── File rows ────────────────────────────────────────────────────
+       Used by the Files page and the attachments section of a task. */
+    .file-row { display: flex; align-items: flex-start; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+    .file-row:last-child { border-bottom: none; }
+    .file-ic { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 4px; display: flex; align-items: center; justify-content: center; background: var(--accent-wash); color: var(--accent-ink); }
+    .file-ic svg { width: 15px; height: 15px; }
+    .file-meta { flex: 1; min-width: 0; }
+    /* Filenames are long and arbitrary — they must truncate rather than
+       force the row (and on mobile, the page) into a horizontal scroll. */
+    .file-name { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-sub  { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; font-family: var(--font-mono); }
+    .file-note { font-size: 12px; color: var(--text-secondary); margin-top: 5px; padding-left: 8px; border-left: 2px solid var(--border-strong); line-height: 1.5; }
+    .file-actions { flex: 0 0 auto; display: flex; gap: 5px; }
+    .file-empty { font-size: 12.5px; color: var(--text-muted); padding: 14px 0; }
+
+    .file-upload-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .file-hint { font-size: 11px; color: var(--text-faint); font-family: var(--font-mono); }
+    .file-input { font-size: 12px; color: var(--text-secondary); max-width: 100%; }
+    .file-input::file-selector-button {
+      margin-right: 9px; padding: 6px 12px; border-radius: 4px;
+      border: 1px solid var(--border-strong); background: var(--bg-raised);
+      color: var(--text-primary); font: 600 12px var(--font); cursor: pointer;
+    }
+    .file-input::file-selector-button:hover { border-color: var(--accent); color: var(--accent-ink); }
+
     @media (max-width: 768px) {
       :root { --sidebar-w: 0px; }
       .sidebar { transform: translateX(-100%); width: 232px; transition: transform .25s var(--ease-out); }
@@ -1482,6 +1507,7 @@
         <div id="page-reports"       class="page"></div>
         <div id="page-audit"         class="page"></div>
         <div id="page-notifications" class="page"></div>
+        <div id="page-files"         class="page"></div>
         <div id="page-settings"      class="page"></div>
       </main>
     </div>
@@ -1525,6 +1551,10 @@ const IC = {
   activity:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
   spinner:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>`,
   question:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  files:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+  paperclip:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`,
+  send:          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
+  inbox:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>`,
 };
 
 // ═══════════════════════════════════════════════════════
@@ -2030,7 +2060,14 @@ function getNavItems() {
 }
 
 function buildNav() {
-  const items = getNavItems();
+  // Files is available to every role, so it is inserted once here rather than
+  // repeated into all five role lists in getNavItems(). It sits directly above
+  // Settings, which is always last.
+  const items = [...getNavItems()];
+  const settingsAt = items.findIndex(i => i.page === 'settings');
+  items.splice(settingsAt === -1 ? items.length : settingsAt, 0,
+    { icon: 'files', label: 'Files', page: 'files' });
+
   document.getElementById('sbNav').innerHTML =
     '<div class="sb-section">Navigation</div>' +
     items.map(it =>
@@ -2050,6 +2087,7 @@ function sp(page) {
     reviews: 'Task Reviews', employees: 'Employees', teams: 'Teams',
     departments: 'Departments', reports: 'Reports & Analytics',
     audit: 'Audit Log', notifications: 'Notifications', settings: 'Settings',
+    files: 'Files',
   };
   document.getElementById('pgTitle').textContent = titles[page] || page;
   closeSidebar();
@@ -2061,6 +2099,7 @@ async function render(page) {
     dashboard: rdDash, tasks: rdTasks, submit: rdSubmit, reviews: rdReviews,
     employees: rdEmployees, teams: rdTeams, departments: rdDepts,
     reports: rdReports, audit: rdAudit, notifications: rdNotifs, settings: rdSettings,
+    files: rdFiles,
   };
   if (fns[page]) await fns[page]();
 }
@@ -2646,9 +2685,17 @@ async function viewTask(id) {
           <button class="btn btn-success btn-sm" onclick="doReview('${t._id}','approve')">${IC.check} Approve</button>
           <button class="btn btn-danger btn-sm"  onclick="doReview('${t._id}','reject')">${IC.x} Reject</button>
         </div>
-      </div>` : ''}`,
+      </div>` : ''}
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
+        <div class="profile-field-label" style="margin-bottom:2px">Attachments</div>
+        <div id="taskFilesBox"><div class="file-empty">Loading files…</div></div>
+      </div>`,
       null, true
     );
+
+    // Populated after the modal is in the DOM — the attachment list is a
+    // second request and should not hold up the details the user asked for.
+    loadTaskFiles(t._id);
   } catch (e) { toast('Error', e.message, 'error'); }
 }
 
@@ -3883,6 +3930,273 @@ async function markAllNotifsRead() {
 // ═══════════════════════════════════════════════════════
 //  SETTINGS
 // ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+//  FILE SHARING
+// ═══════════════════════════════════════════════════════
+// Uploads go browser -> S3 directly using a presigned POST the server issues.
+// The file bytes never pass through the API, which is what makes a 25 MB cap
+// survivable on a small dyno. Three steps: ask for a URL, POST to S3, tell the
+// server it landed.
+
+let FILECFG = null;   // cached /attachments/config
+
+async function fileConfig() {
+  if (!FILECFG) {
+    try { FILECFG = (await GET('/attachments/config')).config; }
+    catch (e) { FILECFG = { enabled: false, maxMb: 25, allowedTypes: [], allowedExts: '' }; }
+  }
+  return FILECFG;
+}
+
+const fmtBytes = b => {
+  if (!b) return '0 KB';
+  return b < 1024 * 1024 ? `${Math.round(b / 1024)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`;
+};
+
+// Filenames and notes are user-authored and land in innerHTML — they go
+// through the existing esc() helper defined above.
+
+async function doUpload(file, meta, onProgress) {
+  const cfg = await fileConfig();
+  if (!cfg.enabled) throw new Error('File storage is not configured on this server.');
+  if (file.size > cfg.maxMb * 1024 * 1024) {
+    throw new Error(`That file is ${fmtBytes(file.size)}. The limit is ${cfg.maxMb} MB.`);
+  }
+
+  // 1. Reserve a row and get the presigned POST.
+  const init = await POST('/attachments/upload-url', {
+    filename: file.name,
+    mimeType: file.type,
+    size:     file.size,
+    ...meta,
+  });
+
+  // 2. Straight to S3. XHR rather than fetch purely because it reports upload
+  //    progress, which matters at 25 MB on an office connection.
+  const form = new FormData();
+  Object.entries(init.upload.fields).forEach(([k, v]) => form.append(k, v));
+  form.append('file', file);
+
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', init.upload.url);
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload  = () => (xhr.status >= 200 && xhr.status < 300)
+      ? resolve()
+      : reject(new Error(`Upload rejected by storage (${xhr.status}).`));
+    xhr.onerror = () => reject(new Error('Upload failed — check your connection.'));
+    xhr.send(form);
+  });
+
+  // 3. Server confirms with S3 and makes the row visible.
+  const done = await POST(`/attachments/${init.attachmentId}/complete`, {});
+  return done.attachment;
+}
+
+async function downloadFile(id) {
+  try {
+    const { url } = await GET(`/attachments/${id}/download`);
+    // A presigned URL is a bearer credential with a short life — open it, do
+    // not render it anywhere it could be copied out of the page.
+    window.open(url, '_blank', 'noopener');
+  } catch (e) {
+    toast('Download failed', e.message, 'error');
+  }
+}
+
+function confirmDeleteFile(id, name, after) {
+  openConfirm('Delete file?', `"${name}" will be permanently removed for everyone.`, async () => {
+    try {
+      await DELETE('/attachments/' + id);
+      toast('Deleted', 'File removed.', 'success');
+      after && after();
+    } catch (e) { toast('Not deleted', e.message, 'error'); }
+  });
+}
+
+function fileRow(f, { showDelete, after, context }) {
+  const who  = f.uploadedBy?.name || '—';
+  const mine = getId(f.uploadedBy) === CU._id;
+  return `<div class="file-row">
+    <div class="file-ic">${IC.files}</div>
+    <div class="file-meta">
+      <div class="file-name" title="${esc(f.filename)}">${esc(f.filename)}</div>
+      <div class="file-sub">${esc(context || who)} · ${fmtBytes(f.size)} · ${fmtTime(f.createdAt)} ${fmtDate(f.createdAt)}</div>
+      ${f.note ? `<div class="file-note">${esc(f.note)}</div>` : ''}
+    </div>
+    <div class="file-actions">
+      <button class="btn btn-secondary btn-xs" onclick="downloadFile('${f._id}')" title="Download">${IC.download}</button>
+      ${showDelete && (mine || ['admin','superadmin'].includes(CU.role))
+        ? `<button class="btn btn-xs" style="background:var(--red-wash);color:var(--red)" onclick="confirmDeleteFile('${f._id}','${esc(f.filename).replace(/'/g, "\\'")}', ${after})" title="Delete">${IC.trash}</button>`
+        : ''}
+    </div>
+  </div>`;
+}
+
+// ── Files section inside the task modal ────────────────────────────────
+async function loadTaskFiles(taskId) {
+  const box = document.getElementById('taskFilesBox');
+  if (!box) return;
+  const cfg = await fileConfig();
+
+  try {
+    const { files } = await GET('/attachments/task/' + taskId);
+    box.innerHTML = `
+      ${files.length
+        ? files.map(f => fileRow(f, { showDelete: true, after: `() => loadTaskFiles('${taskId}')` })).join('')
+        : '<div class="file-empty">No files attached yet.</div>'}
+      ${cfg.enabled ? `
+        <div class="file-upload-row">
+          <input type="file" id="taskFileInput" class="file-input" accept="${cfg.allowedTypes.join(',')}">
+          <button class="btn btn-secondary btn-sm" onclick="uploadTaskFile('${taskId}')">${IC.paperclip} Attach file</button>
+          <span class="file-hint" id="taskFileHint">Max ${cfg.maxMb} MB · ${cfg.allowedExts}</span>
+        </div>` : '<div class="file-empty">File storage is not configured on this server.</div>'}`;
+  } catch (e) {
+    box.innerHTML = `<div class="file-empty">Could not load files: ${esc(e.message)}</div>`;
+  }
+}
+
+async function uploadTaskFile(taskId) {
+  const input = document.getElementById('taskFileInput');
+  const hint  = document.getElementById('taskFileHint');
+  const file  = input?.files?.[0];
+  if (!file) { toast('No file chosen', 'Pick a file first.', 'warning'); return; }
+
+  try {
+    hint.textContent = 'Uploading… 0%';
+    await doUpload(file, { kind: 'task-attachment', taskId }, p => hint.textContent = `Uploading… ${p}%`);
+    toast('Uploaded', `"${file.name}" attached.`, 'success');
+    loadTaskFiles(taskId);
+  } catch (e) {
+    hint.textContent = '';
+    toast('Upload failed', e.message, 'error');
+  }
+}
+
+// ── Files page (inbox) ─────────────────────────────────────────────────
+let FILES_TAB = 'received';
+
+async function rdFiles() {
+  const el  = document.getElementById('page-files');
+  const cfg = await fileConfig();
+
+  el.innerHTML = `<div class="card mb">
+      <div class="card-header"><div class="card-title">Send a File</div></div>
+      <div class="card-body" id="fileComposer"><div class="file-empty">Loading…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">My Files</div></div>
+      <div class="card-body">
+        <div class="tab-bar">
+          <div class="tab ${FILES_TAB === 'received' ? 'active' : ''}" id="ftab-received" role="button" tabindex="0"
+               onclick="switchFilesTab('received')"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();switchFilesTab('received')}">Received</div>
+          <div class="tab ${FILES_TAB === 'sent' ? 'active' : ''}" id="ftab-sent" role="button" tabindex="0"
+               onclick="switchFilesTab('sent')"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();switchFilesTab('sent')}">Sent</div>
+        </div>
+        <div id="fileList"><div class="file-empty">Loading…</div></div>
+      </div>
+    </div>`;
+
+  if (!cfg.enabled) {
+    document.getElementById('fileComposer').innerHTML =
+      '<div class="file-empty">File storage is not configured on this server, so files cannot be sent or received yet.</div>';
+  } else {
+    await buildComposer();
+  }
+  await loadInbox();
+}
+
+async function buildComposer() {
+  const cfg = await fileConfig();
+  const box = document.getElementById('fileComposer');
+
+  // Employees can only see the user list through this endpoint if their role
+  // allows it; when it does not, they can still send to their own manager,
+  // which the server resolves. Fall back rather than showing an error.
+  let people = [];
+  try {
+    const { users } = await GET('/users?active=true');
+    people = users.filter(u => u._id !== CU._id);
+  } catch (e) { people = []; }
+
+  box.innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Send to</label>
+      ${people.length
+        ? `<select class="form-input" id="fsTo" multiple size="${Math.min(6, Math.max(3, people.length))}">
+             ${people.map(u => `<option value="${u._id}">${esc(u.name)} — ${esc(u.designation || u.role)}</option>`).join('')}
+           </select>
+           <div class="file-hint" style="margin-top:5px">Hold Ctrl (or Cmd) to select more than one person.</div>`
+        : `<div class="file-empty">No recipients available to you.</div>`}
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
+      <input class="form-input" id="fsNote" maxlength="500" placeholder="What is this file for?">
+    </div>
+    <div class="form-group">
+      <label class="form-label">File</label>
+      <input type="file" id="fsFile" class="file-input" accept="${cfg.allowedTypes.join(',')}">
+      <div class="file-hint" style="margin-top:5px" id="fsHint">Max ${cfg.maxMb} MB · ${cfg.allowedExts}</div>
+    </div>
+    <button class="btn btn-primary" onclick="sendFile()" ${people.length ? '' : 'disabled'}>${IC.send} Send file</button>`;
+}
+
+async function sendFile() {
+  const sel  = document.getElementById('fsTo');
+  const note = document.getElementById('fsNote').value.trim();
+  const file = document.getElementById('fsFile').files?.[0];
+  const hint = document.getElementById('fsHint');
+
+  const recipients = sel ? [...sel.selectedOptions].map(o => o.value) : [];
+  if (!recipients.length) { toast('No recipient', 'Choose at least one person.', 'warning'); return; }
+  if (!file)              { toast('No file', 'Choose a file to send.', 'warning'); return; }
+
+  try {
+    hint.textContent = 'Uploading… 0%';
+    await doUpload(file, { kind: 'direct-message', recipients, note },
+      p => hint.textContent = `Uploading… ${p}%`);
+    toast('Sent', `"${file.name}" sent to ${recipients.length} ${recipients.length === 1 ? 'person' : 'people'}.`, 'success');
+    await buildComposer();
+    FILES_TAB = 'sent';
+    await rdFiles();
+  } catch (e) {
+    hint.textContent = '';
+    toast('Send failed', e.message, 'error');
+  }
+}
+
+function switchFilesTab(tab) {
+  FILES_TAB = tab;
+  document.getElementById('ftab-received')?.classList.toggle('active', tab === 'received');
+  document.getElementById('ftab-sent')?.classList.toggle('active', tab === 'sent');
+  loadInbox();
+}
+
+async function loadInbox() {
+  const list = document.getElementById('fileList');
+  if (!list) return;
+  try {
+    const { received, sent } = await GET('/attachments/inbox');
+    const rows = FILES_TAB === 'received' ? received : sent;
+
+    list.innerHTML = rows.length
+      ? rows.map(f => fileRow(f, {
+          showDelete: FILES_TAB === 'sent',
+          after: '() => loadInbox()',
+          context: FILES_TAB === 'received'
+            ? `From ${f.uploadedBy?.name || '—'}`
+            : `To ${(f.recipients || []).map(r => r.name).join(', ') || (f.task ? 'task: ' + (f.task.title || '') : '—')}`,
+        })).join('')
+      : `<div class="file-empty">${FILES_TAB === 'received' ? 'Nothing has been sent to you yet.' : 'You have not sent any files yet.'}</div>`;
+  } catch (e) {
+    list.innerHTML = `<div class="file-empty">Could not load files: ${esc(e.message)}</div>`;
+  }
+}
+
 // ── Email notification preferences ─────────────────────────────────────
 const PREF_COPY = {
   emailTaskAssigned: {

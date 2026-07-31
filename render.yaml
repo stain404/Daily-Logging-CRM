@@ -46,3 +46,11 @@ services:
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
+
+      # ── File sharing (AWS S3) ────────────────────────────────────
+      # Per-file cap, enforced by S3 via the presigned POST policy.
+      - key: MAX_UPLOAD_MB
+        value: "25"
+      # Naming a private bucket switches file sharing on.
+      - key: S3_BUCKET
+        sync: false

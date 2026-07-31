@@ -41,6 +41,11 @@ const TaskSchema = new mongoose.Schema({
   mgComment:  { type: String, default: '' },
   mgRating:   { type: Number, min: 1, max: 5 },
   assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+  // Denormalised so a task list can show a paperclip without one Attachment
+  // query per row. Maintained by routes/attachments.js; treat the Attachment
+  // collection as the source of truth if the two ever disagree.
+  attachmentCount: { type: Number, default: 0, min: 0 },
 }, { timestamps: true });
 
 // Indexes for fast queries
