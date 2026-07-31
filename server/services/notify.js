@@ -1,6 +1,8 @@
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const Team = require('../models/Team');
+const mailer    = require('./mailer');
+const templates = require('./emailTemplates');
 
 // ── Who oversees a given employee ────────────────────────────────────
 // Their directly-assigned manager, plus the manager of any team they are
@@ -60,11 +62,17 @@ async function notify(recipientIds, { type, title, message, task, actor, severit
 // ── Event helpers ─────────────────────────────────────────────────────
 // Each returns a promise the caller can await (or not) — they self-contain
 // their own error handling via notify().
+//
+// These are also the single hook point for transactional email. Email is
+// dispatched here rather than from the route handlers so that the recipient
+// logic — supervisorsOf() in particular, which has to check two independent
+// links — exists once and cannot drift between the in-app and email paths.
+// mailer.sendToUser* swallow their own errors on the same contract as notify().
 
 // A manager assigned a task. Only the assignee cares; per the agreed scope
 // the CEO is not notified about routine hand-outs.
 async function taskAssigned(task, actor, actorName) {
-  return notify([task.userId], {
+  const inApp = notify([task.userId], {
     type: 'assigned',
     title: 'New task assigned',
     message: `${actorName} assigned you "${task.title}"${
@@ -74,12 +82,24 @@ async function taskAssigned(task, actor, actorName) {
     actor,
     severity: 'info',
   });
+
+  const email = mailer.sendToUsers([task.userId], actor, {
+    type: 'assigned',
+    task,
+    render: ({ recipientName, url }) => templates.taskAssigned({
+      task, assignedByName: actorName, recipientName, url,
+    }),
+  });
+
+  return Promise.all([inApp, email]);
 }
 
 // An employee submitted work. Goes to their supervisors and to the CEO.
 async function taskSubmitted(task, actor, actorName, { late = false } = {}) {
   const [sups, chiefs] = await Promise.all([supervisorsOf(task.userId), ceos()]);
-  return notify([...sups, ...chiefs], {
+  const recipients = [...sups, ...chiefs];
+
+  const inApp = notify(recipients, {
     type: 'submitted',
     title: late ? 'Late submission' : 'Task submitted',
     message: `${actorName} submitted "${task.title}"${late ? ' after its deadline' : ''}.`,
@@ -87,6 +107,16 @@ async function taskSubmitted(task, actor, actorName, { late = false } = {}) {
     actor,
     severity: late ? 'warning' : 'info',
   });
+
+  const email = mailer.sendToUsers(recipients, actor, {
+    type: 'submitted',
+    task,
+    render: ({ url }) => templates.taskSubmitted({
+      task, submittedByName: actorName, submittedAt: task.submittedAt, url, late,
+    }),
+  });
+
+  return Promise.all([inApp, email]);
 }
 
 // A manager reviewed a submission. Goes to the task owner and to the CEO.
@@ -99,7 +129,7 @@ async function taskReviewed(task, actor, actorName, action) {
              : action === 'reject'  ? 'rejected'
              : 'requested clarification on';
 
-  return notify([task.userId, ...chiefs], {
+  const inApp = notify([task.userId, ...chiefs], {
     type: 'reviewed',
     title: action === 'approve' ? 'Task approved'
          : action === 'reject'  ? 'Task rejected'
@@ -109,6 +139,19 @@ async function taskReviewed(task, actor, actorName, action) {
     actor,
     severity,
   });
+
+  // Only the task owner is emailed, though the in-app fan-out also reaches the
+  // CEO. Emailing every superadmin on every individual review turns the CEO's
+  // inbox into a firehose within a week; they still get the in-app record.
+  const email = mailer.sendToUsers([task.userId], actor, {
+    type: 'reviewed',
+    task,
+    render: ({ url }) => templates.taskReviewed({
+      task, reviewerName: actorName, action, url,
+    }),
+  });
+
+  return Promise.all([inApp, email]);
 }
 
 module.exports = { notify, supervisorsOf, ceos, taskAssigned, taskSubmitted, taskReviewed };

@@ -33,6 +33,23 @@ const UserSchema = new mongoose.Schema({
   active:     { type: Boolean, default: true },
   joined:     { type: Date, default: Date.now },
   lastLogin:  { type: Date },
+
+  // Per-type email opt-outs. Default on, so existing rows (which have no
+  // subdocument at all) read as opted in without a migration.
+  //
+  // Note these are preferences, not permissions: a manager may switch
+  // emailTaskSubmitted off in the UI but the send layer overrides it, because
+  // submission alerts are the one notification the review chain must receive.
+  // See services/mailer.js — the server is the authority, not this field.
+  notificationPrefs: {
+    emailTaskAssigned:  { type: Boolean, default: true },
+    emailTaskSubmitted: { type: Boolean, default: true },
+    emailTaskReviewed:  { type: Boolean, default: true },
+  },
+
+  // Set from an SES bounce/complaint notification. Stops us re-sending to a
+  // dead address, which is what damages a sending domain's reputation.
+  emailBounced: { type: Boolean, default: false },
 }, { timestamps: true });
 
 // Hash password + auto-generate initials before save

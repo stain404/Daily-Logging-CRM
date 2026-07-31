@@ -1264,6 +1264,31 @@
     /* Title cells carry an inline max-width for the desktop grid */
     .tbl-stacked td[style*="max-width"] { max-width: none !important; }
 
+    /* ── Preference switches ──────────────────────────────────────────
+       Built on a real <input type="checkbox"> rather than a styled div, so
+       it stays keyboard-operable and announces its state to screen readers
+       for free. The input is clipped rather than display:none — hiding it
+       outright removes it from the tab order. */
+    .pref-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--border); }
+    .pref-row:last-of-type { border-bottom: none; }
+    .pref-copy { flex: 1; min-width: 0; }
+    .pref-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pref-desc  { font-size: 12px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
+    .pref-locked { font-size: 11px; font-weight: 700; color: var(--warn); margin-top: 5px; text-transform: uppercase; letter-spacing: .4px; }
+
+    .sw { position: relative; flex: 0 0 auto; width: 40px; height: 22px; }
+    .sw input { position: absolute; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+    .sw-track { position: absolute; inset: 0; border-radius: 11px; background: var(--bg-raised); border: 1px solid var(--border-strong); transition: background .15s ease, border-color .15s ease; pointer-events: none; }
+    .sw-thumb { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-muted); transition: transform .15s ease, background .15s ease; pointer-events: none; }
+    .sw input:checked ~ .sw-track { background: var(--accent-wash-strong); border-color: var(--accent); }
+    .sw input:checked ~ .sw-thumb { transform: translateX(18px); background: var(--accent); }
+    .sw input:focus-visible ~ .sw-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+    /* A locked switch stays visibly on — it is not off, it is not yours to
+       change — so it keeps the accent fill and only loses its affordance. */
+    .sw input:disabled { cursor: not-allowed; }
+    .sw input:disabled ~ .sw-track { opacity: .55; }
+    .sw input:disabled ~ .sw-thumb { opacity: .55; }
+
     @media (max-width: 768px) {
       :root { --sidebar-w: 0px; }
       .sidebar { transform: translateX(-100%); width: 232px; transition: transform .25s var(--ease-out); }
@@ -1927,6 +1952,31 @@ function initApp() {
   buildNav();
   sp('dashboard');
   startNotifPolling();
+  openDeepLink();
+}
+
+// ── Deep links from email ──────────────────────────────────────────────
+// The app has no router, so a link from an email arrives as ?task=<id> and is
+// consumed here. initApp() runs both on a restored session and immediately
+// after login, so a recipient who was signed out still lands on the task once
+// they authenticate — the query string survives, because logging in never
+// navigates away from the page.
+function openDeepLink() {
+  let id;
+  try {
+    id = new URLSearchParams(window.location.search).get('task');
+  } catch (e) { return; }
+  if (!id || !/^[a-f\d]{24}$/i.test(id)) return;
+
+  // Stripped before opening, so a refresh (or the back button) doesn't
+  // re-open the modal over whatever the user navigated to since.
+  try {
+    history.replaceState(null, '', window.location.pathname);
+  } catch (e) { /* file:// origins reject replaceState — not fatal */ }
+
+  // Deferred: sp('dashboard') above kicked off an async render, and opening a
+  // modal mid-render leaves it behind the page content.
+  setTimeout(() => viewTask(id), 60);
 }
 
 function getNavItems() {
@@ -3833,8 +3883,100 @@ async function markAllNotifsRead() {
 // ═══════════════════════════════════════════════════════
 //  SETTINGS
 // ═══════════════════════════════════════════════════════
+// ── Email notification preferences ─────────────────────────────────────
+const PREF_COPY = {
+  emailTaskAssigned: {
+    title: 'A task is assigned to me',
+    desc:  'Emailed when a manager assigns you a task, including the deadline and a link straight to it.',
+  },
+  emailTaskSubmitted: {
+    title: 'Someone I oversee submits work',
+    desc:  'Emailed when an employee you supervise submits a task for review.',
+  },
+  emailTaskReviewed: {
+    title: 'My submission is reviewed',
+    desc:  'Emailed when a manager approves, rejects, or asks for clarification on your work.',
+  },
+};
+
+function prefsCard(prefs, err) {
+  if (err) {
+    return `<div class="card mb">
+      <div class="card-header"><div class="card-title">Email Notifications</div></div>
+      <div class="card-body"><div class="pref-desc">Could not load your preferences: ${err}</div></div>
+    </div>`;
+  }
+  if (!prefs) return '';
+
+  const locked = prefs.locked || [];
+
+  // The "someone I oversee submits" row is only rendered for people who
+  // actually receive that email — the server decides who that is by returning
+  // it in `locked`. Showing an employee a switch that governs nothing they
+  // will ever be sent is worse than showing them nothing.
+  const keys = Object.keys(PREF_COPY).filter(k =>
+    k !== 'emailTaskSubmitted' || locked.includes('emailTaskSubmitted')
+  );
+
+  const rows = keys.map(k => {
+    const isLocked = locked.includes(k);
+    // A locked switch renders on regardless of the stored value, because that
+    // is what will actually happen at send time.
+    const on = isLocked || prefs.prefs[k] !== false;
+    return `<div class="pref-row">
+      <div class="pref-copy">
+        <div class="pref-title">${PREF_COPY[k].title}</div>
+        <div class="pref-desc">${PREF_COPY[k].desc}</div>
+        ${isLocked ? '<div class="pref-locked">Required for reviewers — cannot be turned off</div>' : ''}
+      </div>
+      <label class="sw" title="${isLocked ? 'Reviewers must receive submission alerts' : PREF_COPY[k].title}">
+        <input type="checkbox" id="pref_${k}" ${on ? 'checked' : ''} ${isLocked ? 'disabled' : ''}
+               onchange="savePref('${k}', this.checked)"
+               aria-label="${PREF_COPY[k].title}">
+        <span class="sw-track"></span><span class="sw-thumb"></span>
+      </label>
+    </div>`;
+  }).join('');
+
+  // No address means every switch above is academic. Say so rather than
+  // letting someone toggle happily and wonder why nothing arrives.
+  const noEmail = prefs.hasEmail ? '' : `<div class="review-challenge" style="margin-bottom:4px">${IC.alert}<span>Your account has no email address, so no notifications can be delivered. Add one above first.</span></div>`;
+
+  return `<div class="card mb">
+    <div class="card-header"><div class="card-title">Email Notifications</div></div>
+    <div class="card-body">
+      ${noEmail}
+      ${rows}
+    </div>
+  </div>`;
+}
+
+async function savePref(key, value) {
+  const input = document.getElementById('pref_' + key);
+  try {
+    const out = await PUT('/users/me/notification-prefs', { [key]: value });
+    toast('Saved', out.message || 'Preference updated.', 'success');
+  } catch (e) {
+    // Put the switch back — leaving it showing a state the server rejected is
+    // how people end up believing they opted out when they did not.
+    if (input) input.checked = !value;
+    toast('Not saved', e.message, 'error');
+  }
+}
+
 async function rdSettings() {
   const el = document.getElementById('page-settings');
+
+  // Fetched up front so the card renders in its real state rather than
+  // flickering from a default. A failure here must not take the whole settings
+  // page down with it, so it degrades to a note instead.
+  let prefs = null, prefsErr = null;
+  try {
+    prefs = await GET('/users/me/notification-prefs');
+  } catch (e) {
+    prefsErr = e.message;
+  }
+
   el.innerHTML = `<div style="max-width:620px">
     <div class="card mb">
       <div class="card-header"><div class="card-title">My Profile</div></div>
@@ -3865,6 +4007,8 @@ async function rdSettings() {
         <button class="btn btn-primary" onclick="saveProfileEmail()">${IC.check} Save Email</button>
       </div>
     </div>
+
+    ${prefsCard(prefs, prefsErr)}
 
     <div class="card mb">
       <div class="card-header"><div class="card-title">Change Password</div></div>

@@ -4,6 +4,7 @@ const User    = require('../models/User');
 const Task    = require('../models/Task');
 const Audit   = require('../models/Audit');
 const { protect, authorize } = require('../middleware/auth');
+const { REVIEW_ROLES } = require('../services/mailer');
 
 // ── GET /api/users ────────────────────────────────────────────────────
 router.get('/', protect, authorize('hr', 'manager', 'admin', 'superadmin'), async (req, res) => {
@@ -30,6 +31,77 @@ router.get('/', protect, authorize('hr', 'manager', 'admin', 'superadmin'), asyn
       .sort({ name: 1 });
 
     res.json({ success: true, count: users.length, users });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── GET /api/users/me/notification-prefs ──────────────────────────────
+// Self-serve, so it is deliberately not behind authorize(): every role needs
+// to manage their own email preferences, and PUT /api/users/:id is restricted
+// to hr/admin/superadmin.
+//
+// Registered above GET /:id — two path segments means it could not be captured
+// by that route anyway, but keeping literal paths first avoids the trap next
+// time someone adds a single-segment /me route.
+router.get('/me/notification-prefs', protect, async (req, res) => {
+  try {
+    const prefs = req.user.notificationPrefs || {};
+
+    res.json({
+      success: true,
+      prefs: {
+        emailTaskAssigned:  prefs.emailTaskAssigned  !== false,
+        emailTaskSubmitted: prefs.emailTaskSubmitted !== false,
+        emailTaskReviewed:  prefs.emailTaskReviewed  !== false,
+      },
+      // Types this user may not switch off, so the client can render the
+      // toggle disabled with a reason instead of letting it silently fail.
+      locked: REVIEW_ROLES.includes(req.user.role) ? ['emailTaskSubmitted'] : [],
+      // No address on file means none of this has any effect — worth surfacing.
+      hasEmail: Boolean(req.user.email),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── PUT /api/users/me/notification-prefs ──────────────────────────────
+router.put('/me/notification-prefs', protect, async (req, res) => {
+  try {
+    const ALLOWED = ['emailTaskAssigned', 'emailTaskSubmitted', 'emailTaskReviewed'];
+    const update  = {};
+
+    for (const key of ALLOWED) {
+      if (typeof req.body[key] === 'boolean') {
+        update[`notificationPrefs.${key}`] = req.body[key];
+      }
+    }
+
+    if (!Object.keys(update).length) {
+      return res.status(400).json({
+        success: false,
+        message: `Provide at least one boolean preference: ${ALLOWED.join(', ')}.`,
+      });
+    }
+
+    // A reviewer switching submission alerts off is stored as asked but has no
+    // effect — services/mailer.js overrides it at send time. Accepting the
+    // write and reporting the override is clearer than a 403 on a checkbox.
+    const overridden = REVIEW_ROLES.includes(req.user.role)
+      && update['notificationPrefs.emailTaskSubmitted'] === false;
+
+    const user = await User.findByIdAndUpdate(req.user._id, update, {
+      new: true, runValidators: true,
+    }).select('notificationPrefs');
+
+    res.json({
+      success: true,
+      prefs: user.notificationPrefs,
+      message: overridden
+        ? 'Saved. Task-submitted alerts stay on for reviewers and cannot be disabled.'
+        : 'Notification preferences updated.',
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

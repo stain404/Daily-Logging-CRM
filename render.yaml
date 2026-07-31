@@ -22,3 +22,27 @@ services:
       # Paste the mongodb+srv:// URI in the Render dashboard.
       - key: MONGODB_URI
         sync: false
+
+      # ── Email (AWS SES) ──────────────────────────────────────────
+      # Stays false until the sending domain is DKIM-verified and the fake
+      # seed addresses are gone. While false, sends are logged as 'dry-run'
+      # and nothing leaves the server.
+      - key: EMAIL_ENABLED
+        value: "false"
+      - key: MAIL_FROM_NAME
+        value: TaskFlow
+      - key: MAIL_BRAND_NAME
+        value: TaskFlow
+      - key: AWS_REGION
+        value: us-east-1
+      # An address on your SES-verified domain.
+      - key: MAIL_FROM
+        sync: false
+      # Public URL of this service — builds the task deep link in emails.
+      - key: APP_URL
+        sync: false
+      # SES credentials. Prefer a dedicated IAM user scoped to ses:SendEmail.
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
