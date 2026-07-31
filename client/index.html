@@ -76,6 +76,10 @@
       --sidebar-text-faint: #4d5861;
       --sidebar-border:     #232a33;
       --sidebar-hover:      #161b22;
+      /* The sidebar keeps a dark ground in light mode, so it cannot borrow
+         --red: that hue gets retuned for cream below and drops to 3.85:1
+         here. This one stays dark-ground-safe in both themes. */
+      --sidebar-danger:     #ff5c6b;
 
       /* "Ink" variants: text-safe versions of status/accent colors for use
          as glyph color on a panel background. Equal to the base hue in dark
@@ -107,12 +111,45 @@
       --text-muted:     #8a8168;
       --text-faint:     #ab9f85;
 
-      --accent-ink: #c41f66;
-      --green-ink:  #0a8a5c;
-      --red-ink:    #c2242f;
-      --warn-ink:   #b5650a;
-      --violet-ink: #7b1fb8;
-      --cyan-ink:   #007a8c;
+      /* Pigment on paper.
+         The dark theme's hues are phosphor colors, mixed to glow against
+         #06080b. Dropped onto cream they go chalky and lose their bite —
+         which is why light mode read as washed out. These are remixed for a
+         reflective ground: denser, more saturated, printed rather than lit.
+
+         Two jobs, two tokens, and the split is what lets the fills stay this
+         loud. The base hue is only ever a fill, border, or bar; the -ink
+         variant is the one that carries text. Every -ink below clears 4.5:1
+         on white, on cream, and on its own wash over both. */
+
+      --accent:             #f5006b;
+      --accent-dim:         #c4004f;
+      /* --accent-bright is deliberately NOT overridden — it colors the active
+         nav item on the sidebar, which stays dark in this theme. */
+      --accent-wash:        rgba(245,0,107,.14);
+      --accent-wash-strong: rgba(245,0,107,.24);
+
+      --green:       #00a86b;
+      --green-wash:  rgba(0,168,107,.15);
+      /* Vermilion, not the dark theme's crimson. Against a magenta accent the
+         two washes were nearly the same pale pink, so "In Progress" and
+         "Delayed" read as the same badge. Pushing danger toward orange opens
+         a real gap without colliding with --warn. */
+      --red:         #e34a2b;
+      --red-wash:    rgba(227,74,43,.14);
+      --warn:        #ff8c00;
+      --warn-wash:   rgba(255,140,0,.16);
+      --cyan:        #00b8d4;
+      --cyan-wash:   rgba(0,184,212,.15);
+      --violet:      #8b2fe0;
+      --violet-wash: rgba(139,47,224,.14);
+
+      --accent-ink: #b3004d;
+      --green-ink:  #06724a;
+      --red-ink:    #b83218;
+      --warn-ink:   #8f4e00;
+      --violet-ink: #6b1bb0;
+      --cyan-ink:   #00697d;
 
       --shadow-sm: 0 1px 2px rgba(30,24,10,.06);
       --shadow:    0 2px 8px rgba(30,24,10,.08);
@@ -249,7 +286,7 @@
       flex-shrink: 0;
       transition: background var(--transition), color var(--transition);
     }
-    .sb-logout:hover { background: var(--red-wash); color: var(--red); }
+    .sb-logout:hover { background: var(--red-wash); color: var(--sidebar-danger); }
     .sb-logout svg { width: 15px; height: 15px; }
 
     /* ─────────────────────────────────────────────
@@ -282,7 +319,7 @@
       transition: all var(--transition);
       position: relative;
     }
-    .tb-icon-btn:hover { background: var(--accent-wash); color: var(--accent); border-color: var(--accent-dim); }
+    .tb-icon-btn:hover { background: var(--accent-wash); color: var(--accent-ink); border-color: var(--accent-dim); }
     .tb-icon-btn svg { width: 16px; height: 16px; }
     .tb-notif-dot {
       position: absolute; top: 6px; right: 6px;
@@ -432,7 +469,7 @@
       display: flex; align-items: center; justify-content: center;
       margin-bottom: 16px;
     }
-    .login-mark svg { width: 24px; height: 24px; color: var(--accent); }
+    .login-mark svg { width: 24px; height: 24px; color: var(--accent-ink); }
     .login-title { font-size: 22px; font-weight: 800; color: var(--text-primary); letter-spacing: -.03em; font-family: var(--font-mono); }
     .login-sub   { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
     .login-hint {
@@ -453,6 +490,12 @@
     .api-status { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
     .api-status-dot { width: 7px; height: 7px; border-radius: 50%; }
     .api-status.online  .api-status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    /* The glow is the lit-LED metaphor and earns its place on the dark ground.
+       On paper it has nothing to emit into and just reads as a smudge, so the
+       halo becomes a crisp containment ring instead. */
+    :root[data-theme="light"] .api-status.online .api-status-dot {
+      box-shadow: 0 0 0 2px var(--green-wash);
+    }
     .api-status.offline .api-status-dot { background: var(--red); }
     .api-status.checking .api-status-dot { background: var(--warn); animation: pulse 1s infinite; }
     @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
@@ -493,7 +536,7 @@
     .form-row  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .form-row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
     .form-help { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
-    .form-err  { font-size: 11px; color: var(--red); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+    .form-err  { font-size: 11px; color: var(--red-ink); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
     .form-err svg { width: 12px; height: 12px; flex-shrink: 0; }
     .input-icon-wrap { position: relative; }
     .input-icon-wrap svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--text-muted); pointer-events: none; }
@@ -551,7 +594,7 @@
     .btn-warning:hover:not(:disabled)   { box-shadow: 0 0 0 3px var(--warn-wash); }
     .btn-ghost     { background: transparent; color: var(--text-secondary); }
     .btn-ghost:hover:not(:disabled)     { background: var(--bg-panel-2); color: var(--text-primary); }
-    .btn-outline   { background: transparent; color: var(--accent); border: 1.5px solid var(--accent-dim); }
+    .btn-outline   { background: transparent; color: var(--accent-ink); border: 1.5px solid var(--accent-dim); }
     .btn-outline:hover:not(:disabled)   { background: var(--accent-wash); border-color: var(--accent); }
     .btn:focus-visible,
     .sb-item:focus-visible,
@@ -764,7 +807,7 @@
       display: flex; align-items: center; justify-content: center;
       transition: all var(--transition);
     }
-    .modal-close:hover { background: var(--red-wash); color: var(--red); }
+    .modal-close:hover { background: var(--red-wash); color: var(--red-ink); }
     .modal-close svg  { width: 14px; height: 14px; }
     .modal-body   { padding: 20px; }
     .modal-footer {
@@ -802,10 +845,10 @@
     .toast.info    { border-left-color: var(--accent); }
     .toast.warning { border-left-color: var(--warn); }
     .toast-icon { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; }
-    .toast.success .toast-icon { color: var(--green); }
-    .toast.error   .toast-icon { color: var(--red); }
-    .toast.info    .toast-icon { color: var(--accent); }
-    .toast.warning .toast-icon { color: var(--warn); }
+    .toast.success .toast-icon { color: var(--green-ink); }
+    .toast.error   .toast-icon { color: var(--red-ink); }
+    .toast.info    .toast-icon { color: var(--accent-ink); }
+    .toast.warning .toast-icon { color: var(--warn-ink); }
     .toast-msg  { flex: 1; color: var(--text-secondary); line-height: 1.5; }
     .toast-title { font-weight: 700; color: var(--text-primary); font-size: 13px; }
     .toast-close {
@@ -880,7 +923,7 @@
       padding: 60px 20px; color: var(--text-muted);
       gap: 12px; font-size: 13px;
     }
-    .page-loader svg { width: 32px; height: 32px; color: var(--accent); }
+    .page-loader svg { width: 32px; height: 32px; color: var(--accent-ink); }
 
     /* ─────────────────────────────────────────────
        DOWNLOAD / EXPORT BOX
@@ -1274,7 +1317,7 @@
     .pref-copy { flex: 1; min-width: 0; }
     .pref-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .pref-desc  { font-size: 12px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
-    .pref-locked { font-size: 11px; font-weight: 700; color: var(--warn); margin-top: 5px; text-transform: uppercase; letter-spacing: .4px; }
+    .pref-locked { font-size: 11px; font-weight: 700; color: var(--warn-ink); margin-top: 5px; text-transform: uppercase; letter-spacing: .4px; }
 
     .sw { position: relative; flex: 0 0 auto; width: 40px; height: 22px; }
     .sw input { position: absolute; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
@@ -1418,7 +1461,7 @@
         <input class="form-input" id="lp" type="password" placeholder="Enter password" />
       </div>
     </div>
-    <div id="lerr" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--red-wash);border-radius:var(--radius);font-size:12px;color:var(--red);display:none;align-items:center;gap:7px;">
+    <div id="lerr" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--red-wash);border-radius:var(--radius);font-size:12px;color:var(--red-ink);display:none;align-items:center;gap:7px;">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       <span id="lerrMsg">Invalid credentials. Please try again.</span>
     </div>
@@ -1892,7 +1935,7 @@ function showGlobalLoader() {
   if (_loaderEl) return;
   _loaderEl = document.createElement('div');
   _loaderEl.style.cssText = 'position:fixed;inset:0;background:rgba(255,255,255,.7);z-index:350;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);';
-  _loaderEl.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--text-muted);font-size:13px;"><span class="spin" style="color:var(--accent)">${IC.spinner}</span>Working…</div>`;
+  _loaderEl.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--text-muted);font-size:13px;"><span class="spin" style="color:var(--accent-ink)">${IC.spinner}</span>Working…</div>`;
   document.body.appendChild(_loaderEl);
 }
 function hideGlobalLoader() { _loaderEl?.remove(); _loaderEl = null; }
@@ -2514,7 +2557,7 @@ async function assignTaskModal() {
 
   openModal('Assign Task', `
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Assign To <span style="color:var(--red)">*</span></label>
+      <div class="form-group"><label class="form-label">Assign To <span style="color:var(--red-ink)">*</span></label>
         <select class="form-select" id="at_user">
           ${members.map(m => `<option value="${m._id}">${m.name}</option>`).join('')}
         </select>
@@ -2524,9 +2567,9 @@ async function assignTaskModal() {
       </div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Task Title <span style="color:var(--red)">*</span></label>
+      <div class="form-group"><label class="form-label">Task Title <span style="color:var(--red-ink)">*</span></label>
         <input class="form-input" id="at_title" placeholder="Brief task title…"></div>
-      <div class="form-group"><label class="form-label">Project <span style="color:var(--red)">*</span></label>
+      <div class="form-group"><label class="form-label">Project <span style="color:var(--red-ink)">*</span></label>
         <input class="form-input" id="at_proj" placeholder="Project name…"></div>
     </div>
     <div class="form-row">
@@ -2673,7 +2716,7 @@ async function viewTask(id) {
       <div style="margin-bottom:14px"></div>
       ${t.challenges ? `<div class="review-challenge">${IC.alert}<span>${t.challenges}</span></div>` : ''}
       ${t.nextPlan ? `<div style="margin-bottom:12px"><div class="profile-field-label">Next Day Plan</div><div style="font-size:13px;color:var(--text-secondary);margin-top:4px">${t.nextPlan}</div></div>` : ''}
-      ${t.mgComment ? `<div class="feedback-block" style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:center;justify-content:space-between"><div class="feedback-block-label">Manager Feedback</div>${['manager','admin','superadmin'].includes(CU.role) ? `<button class="btn btn-xs" style="background:var(--red-wash);color:var(--red)" onclick="clearReview('${t._id}')" title="Delete this feedback">${IC.trash} Remove</button>` : ''}</div><div class="feedback-block-text">${t.mgComment}</div>${t.mgRating ? `<div>${stars(t.mgRating)}</div>` : ''}</div>` : ''}
+      ${t.mgComment ? `<div class="feedback-block" style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:center;justify-content:space-between"><div class="feedback-block-label">Manager Feedback</div>${['manager','admin','superadmin'].includes(CU.role) ? `<button class="btn btn-xs" style="background:var(--red-wash);color:var(--red-ink)" onclick="clearReview('${t._id}')" title="Delete this feedback">${IC.trash} Remove</button>` : ''}</div><div class="feedback-block-text">${t.mgComment}</div>${t.mgRating ? `<div>${stars(t.mgRating)}</div>` : ''}</div>` : ''}
       ${canReview ? `<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
         <div class="profile-field-label" style="margin-bottom:8px">Add Review</div>
         <div class="form-group"><textarea class="form-textarea" id="rvCmt" placeholder="Write your feedback…">${t.mgComment || ''}</textarea></div>
@@ -2788,11 +2831,11 @@ async function rdSubmit() {
         </div>` : ''}
         <div class="form-row" style="margin-bottom:14px">
           <div class="form-group">
-            <label class="form-label">Task Title <span style="color:var(--red)">*</span></label>
+            <label class="form-label">Task Title <span style="color:var(--red-ink)">*</span></label>
             <input class="form-input" id="tf_title" placeholder="Brief task title…" value="${ex?.title || ''}" ${pickedId!=='custom'?'readonly style="background:var(--bg-raised)"':''}>
           </div>
           <div class="form-group">
-            <label class="form-label">Project <span style="color:var(--red)">*</span></label>
+            <label class="form-label">Project <span style="color:var(--red-ink)">*</span></label>
             <input class="form-input" id="tf_proj" placeholder="Project name…" value="${ex?.project || ''}" ${pickedId!=='custom'?'readonly style="background:var(--bg-raised)"':''}>
           </div>
         </div>
@@ -2804,7 +2847,7 @@ async function rdSubmit() {
 
         <div class="form-row" style="margin-bottom:14px">
           <div class="form-group">
-            <label class="form-label">Status <span style="color:var(--red)">*</span></label>
+            <label class="form-label">Status <span style="color:var(--red-ink)">*</span></label>
             <select class="form-select" id="tf_status">
               <option value="">Select status…</option>
               <option value="completed"   ${ex?.status==='completed'   ?'selected':''}>Completed</option>
@@ -2815,7 +2858,7 @@ async function rdSubmit() {
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Priority <span style="color:var(--red)">*</span></label>
+            <label class="form-label">Priority <span style="color:var(--red-ink)">*</span></label>
             <select class="form-select" id="tf_pri">
               <option value="">Select priority…</option>
               <option value="critical" ${ex?.priority==='critical'?'selected':''}>Critical</option>
@@ -2966,7 +3009,7 @@ async function rdReviews() {
                   </div>
                   <div class="review-desc">${t.description || t.desc || 'No description provided.'}</div>
                   ${t.challenges ? `<div class="review-challenge">${IC.alert}<span>${t.challenges}</span></div>` : ''}
-                  ${t.mgComment ? `<div style="padding:10px;background:var(--warn-wash);border-radius:var(--radius);border-left:3px solid var(--warn);font-size:12px;color:var(--text-primary);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span><strong>Prior comment:</strong> ${t.mgComment}</span><button class="btn btn-xs" style="background:var(--red-wash);color:var(--red);flex-shrink:0" onclick="clearReview('${t._id}')" title="Delete this comment">${IC.trash} Clear</button></div>` : ''}
+                  ${t.mgComment ? `<div style="padding:10px;background:var(--warn-wash);border-radius:var(--radius);border-left:3px solid var(--warn);font-size:12px;color:var(--text-primary);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span><strong>Prior comment:</strong> ${t.mgComment}</span><button class="btn btn-xs" style="background:var(--red-wash);color:var(--red-ink);flex-shrink:0" onclick="clearReview('${t._id}')" title="Delete this comment">${IC.trash} Clear</button></div>` : ''}
                   <div class="form-group">
                     <textarea class="form-textarea" id="rc_${t._id}" placeholder="Write your feedback for this task…"></textarea>
                   </div>
@@ -3135,15 +3178,15 @@ async function addEmpModal() {
   try { const r = await GET('/departments'); depts = r.departments; } catch(e) {}
   openModal('Add New Employee', `
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Full Name <span style="color:var(--red)">*</span></label><input class="form-input" id="ne_name" placeholder="Jane Smith"></div>
-      <div class="form-group"><label class="form-label">Employee ID <span style="color:var(--red)">*</span></label><input class="form-input" id="ne_eid" placeholder="EMP010"></div>
+      <div class="form-group"><label class="form-label">Full Name <span style="color:var(--red-ink)">*</span></label><input class="form-input" id="ne_name" placeholder="Jane Smith"></div>
+      <div class="form-group"><label class="form-label">Employee ID <span style="color:var(--red-ink)">*</span></label><input class="form-input" id="ne_eid" placeholder="EMP010"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Email</label><input class="form-input" type="email" id="ne_email" placeholder="Optional — they can add this later"></div>
-      <div class="form-group"><label class="form-label">Username <span style="color:var(--red)">*</span></label><input class="form-input" id="ne_uid" placeholder="janesmith"></div>
+      <div class="form-group"><label class="form-label">Username <span style="color:var(--red-ink)">*</span></label><input class="form-input" id="ne_uid" placeholder="janesmith"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Designation <span style="color:var(--red)">*</span></label><input class="form-input" id="ne_desig" placeholder="e.g. Frontend Developer"></div>
+      <div class="form-group"><label class="form-label">Designation <span style="color:var(--red-ink)">*</span></label><input class="form-input" id="ne_desig" placeholder="e.g. Frontend Developer"></div>
       <div class="form-group"><label class="form-label">Role</label>
         <select class="form-select" id="ne_role">
           <option value="employee">Employee</option>
@@ -3313,7 +3356,7 @@ async function addTeamModal() {
   try { const r = await GET('/departments'); depts = r.departments; } catch(e) {}
   try { const r = await GET('/users?role=manager'); managers = r.users; } catch(e) {}
   openModal('Create New Team', `
-    <div class="form-group"><label class="form-label">Team Name <span style="color:var(--red)">*</span></label><input class="form-input" id="nt_name" placeholder="e.g. Frontend Team"></div>
+    <div class="form-group"><label class="form-label">Team Name <span style="color:var(--red-ink)">*</span></label><input class="form-input" id="nt_name" placeholder="e.g. Frontend Team"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Department</label>
         <select class="form-select" id="nt_dept">${depts.map(d => `<option value="${d._id}">${d.name}</option>`).join('')}</select>
@@ -3471,7 +3514,7 @@ async function rdDepts() {
 
 async function addDeptModal() {
   openModal('Add Department', `
-    <div class="form-group"><label class="form-label">Department Name <span style="color:var(--red)">*</span></label><input class="form-input" id="nd_name" placeholder="e.g. Engineering"></div>
+    <div class="form-group"><label class="form-label">Department Name <span style="color:var(--red-ink)">*</span></label><input class="form-input" id="nd_name" placeholder="e.g. Engineering"></div>
     <div class="form-group">
       <label class="form-label">Brand Color</label>
       <div style="display:flex;align-items:center;gap:12px;margin-top:6px">
@@ -4029,7 +4072,7 @@ function fileRow(f, { showDelete, after, context }) {
     <div class="file-actions">
       <button class="btn btn-secondary btn-xs" onclick="downloadFile('${f._id}')" title="Download">${IC.download}</button>
       ${showDelete && (mine || ['admin','superadmin'].includes(CU.role))
-        ? `<button class="btn btn-xs" style="background:var(--red-wash);color:var(--red)" onclick="confirmDeleteFile('${f._id}','${esc(f.filename).replace(/'/g, "\\'")}', ${after})" title="Delete">${IC.trash}</button>`
+        ? `<button class="btn btn-xs" style="background:var(--red-wash);color:var(--red-ink)" onclick="confirmDeleteFile('${f._id}','${esc(f.filename).replace(/'/g, "\\'")}', ${after})" title="Delete">${IC.trash}</button>`
         : ''}
     </div>
   </div>`;
