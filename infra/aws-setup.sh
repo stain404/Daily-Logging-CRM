@@ -21,13 +21,70 @@ DOMAIN="yourcompany.com"                        # the sending domain you own
 APP_URL="https://your-service.onrender.com"     # exact Render URL, no trailing slash
 # ─────────────────────────────────────────────────────────────────────
 
+# Refuse to run against the placeholders. Creating an SES identity for a
+# domain you do not control leaves junk that can never verify.
+case "$DOMAIN" in
+  yourcompany.com|"") echo "Edit DOMAIN above — it is still the placeholder." >&2; exit 1;;
+esac
+case "$APP_URL" in
+  https://your-service.onrender.com|"") echo "Edit APP_URL above — it is still the placeholder." >&2; exit 1;;
+esac
+
 IAM_USER="taskflow-app"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
-command -v aws >/dev/null || { echo "aws CLI not found. Install it first."; exit 1; }
+# ── Find the AWS CLI ─────────────────────────────────────────────────
+# Two Windows traps this walks around:
+#
+#   1. A shell opened BEFORE the CLI was installed holds a stale copy of PATH
+#      and will never see it, however many times you reinstall. So if `aws` is
+#      not on PATH we look in the standard install location before giving up.
+#
+#   2. `bash` from cmd.exe is usually WSL's bash (C:\Windows\System32\bash.exe),
+#      a separate Linux environment that mounts your drive at /mnt/c and cannot
+#      run Windows .exe files at all. No amount of PATH fixing helps there —
+#      you need Git Bash. Detected and named explicitly, because the symptom
+#      ("aws CLI not found") otherwise looks identical to trap 1.
+if ! command -v aws >/dev/null 2>&1; then
+  for candidate in \
+    "/c/Program Files/Amazon/AWSCLIV2" \
+    "/c/Program Files (x86)/Amazon/AWSCLIV2" \
+    "$LOCALAPPDATA/Programs/Amazon/AWSCLIV2"
+  do
+    if [ -x "$candidate/aws" ] || [ -x "$candidate/aws.exe" ]; then
+      PATH="$PATH:$candidate"; export PATH
+      echo "note: found the AWS CLI at $candidate (it was not on PATH)"
+      break
+    fi
+  done
+fi
+
+if ! command -v aws >/dev/null 2>&1; then
+  if grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+    cat <<'WSL' >&2
+This is WSL's bash, which cannot run the Windows AWS CLI.
+
+Use Git Bash instead: right-click the taskflow folder in Explorer and
+choose "Git Bash Here", then run this script again.
+
+(In cmd.exe, `bash` resolves to C:\Windows\System32\bash.exe — that is WSL,
+not Git Bash.)
+WSL
+  else
+    cat <<'NOAWS' >&2
+aws CLI not found.
+
+If you have already installed it, this shell was opened beforehand and is
+holding a stale PATH — close it and open a new one.
+
+Otherwise:  winget install Amazon.AWSCLI
+NOAWS
+  fi
+  exit 1
+fi
 ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
 say "Account $ACCOUNT · region $REGION"
 
