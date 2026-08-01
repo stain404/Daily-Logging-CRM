@@ -1357,6 +1357,65 @@
     }
     .file-input::file-selector-button:hover { border-color: var(--accent); color: var(--accent-ink); }
 
+    /* ── Recipient picker ─────────────────────────────────────────────
+       Replaces a native <select multiple>, which renders in OS chrome that
+       ignores the theme entirely and hides multi-select behind Ctrl+click.
+       Selected people become removable chips; the rest is a filtered list. */
+    /* .card clips its children so rounded corners cut tables cleanly, but that
+       also truncates an absolutely-positioned dropdown at the card edge. Opt
+       out only on cards that contain one, rather than changing every card. */
+    .card-allows-overflow { overflow: visible; }
+
+    .picker { position: relative; }
+    .picker-field {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+      min-height: 38px; padding: 5px 7px; cursor: text;
+      background: var(--bg-input); border: 1.5px solid var(--border);
+      border-radius: var(--radius); transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .picker-field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
+    .picker-input {
+      flex: 1; min-width: 120px; border: none; outline: none; background: transparent;
+      color: var(--text-primary); font: 400 13px var(--font); padding: 3px 2px;
+    }
+    .picker-input::placeholder { color: var(--text-faint); }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 5px 3px 9px; border-radius: 3px;
+      background: var(--accent-wash); color: var(--accent-ink);
+      border-left: 2px solid var(--accent);
+      font: 600 12px var(--font); max-width: 100%;
+    }
+    .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chip button {
+      display: flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; padding: 0; flex: 0 0 auto;
+      border: none; border-radius: 2px; cursor: pointer;
+      background: transparent; color: inherit; font: 700 13px var(--font); line-height: 1;
+    }
+    .chip button:hover { background: var(--accent); color: var(--bg-panel); }
+    .chip button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+    .picker-menu {
+      position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px);
+      max-height: 230px; overflow-y: auto; display: none;
+      background: var(--bg-panel); border: 1px solid var(--border-strong);
+      border-radius: var(--radius); box-shadow: var(--shadow-md);
+    }
+    .picker-menu.open { display: block; }
+    .picker-opt {
+      display: flex; align-items: center; gap: 9px; padding: 8px 11px;
+      cursor: pointer; font-size: 13px; color: var(--text-primary);
+      border-bottom: 1px solid var(--border);
+    }
+    .picker-opt:last-child { border-bottom: none; }
+    /* .active is driven by the arrow keys as well as the mouse, so hover and
+       keyboard focus have to look identical or the two get out of step. */
+    .picker-opt:hover, .picker-opt.active { background: var(--accent-wash); }
+    .picker-opt-role { margin-left: auto; font-size: 11px; color: var(--text-muted); flex: 0 0 auto; }
+    .picker-empty { padding: 11px; font-size: 12.5px; color: var(--text-muted); }
+
     @media (max-width: 768px) {
       :root { --sidebar-w: 0px; }
       .sidebar { transform: translateX(-100%); width: 232px; transition: transform .25s var(--ease-out); }
@@ -4125,7 +4184,7 @@ async function rdFiles() {
   const el  = document.getElementById('page-files');
   const cfg = await fileConfig();
 
-  el.innerHTML = `<div class="card mb">
+  el.innerHTML = `<div class="card mb card-allows-overflow">
       <div class="card-header"><div class="card-title">Send a File</div></div>
       <div class="card-body" id="fileComposer"><div class="file-empty">Loading…</div></div>
     </div>
@@ -4153,6 +4212,78 @@ async function rdFiles() {
   await loadInbox();
 }
 
+// ── Recipient picker state ─────────────────────────────────────────────
+let FS_PEOPLE = [];   // everyone selectable
+let FS_PICKED = [];   // ids chosen so far, in the order they were added
+let FS_ACTIVE = -1;   // highlighted row in the open menu, for arrow keys
+
+function fsRenderChips() {
+  const box = document.getElementById('fsChips');
+  if (!box) return;
+  box.innerHTML = FS_PICKED.map(id => {
+    const u = FS_PEOPLE.find(p => p._id === id);
+    if (!u) return '';
+    return `<span class="chip"><span>${esc(u.name)}</span><button type="button"
+      aria-label="Remove ${esc(u.name)}" onclick="event.stopPropagation();fsRemove('${id}')">&times;</button></span>`;
+  }).join('');
+}
+
+function fsMatches() {
+  const q = (document.getElementById('fsSearch')?.value || '').trim().toLowerCase();
+  return FS_PEOPLE
+    .filter(u => !FS_PICKED.includes(u._id))
+    .filter(u => !q || u.name.toLowerCase().includes(q)
+              || (u.designation || '').toLowerCase().includes(q)
+              || (u.empId || '').toLowerCase().includes(q));
+}
+
+function fsRenderMenu(open) {
+  const menu = document.getElementById('fsMenu');
+  const input = document.getElementById('fsSearch');
+  if (!menu) return;
+  const rows = fsMatches();
+  if (FS_ACTIVE >= rows.length) FS_ACTIVE = rows.length - 1;
+
+  menu.innerHTML = rows.length
+    ? rows.map((u, i) => `<div class="picker-opt ${i === FS_ACTIVE ? 'active' : ''}" role="option"
+         aria-selected="${i === FS_ACTIVE}" onmousedown="event.preventDefault();fsAdd('${u._id}')">
+         ${av(u, 'av-xs')}<span>${esc(u.name)}</span>
+         <span class="picker-opt-role">${esc(u.designation || u.role)}</span>
+       </div>`).join('')
+    : `<div class="picker-empty">${FS_PICKED.length === FS_PEOPLE.length ? 'Everyone is already selected.' : 'No one matches that.'}</div>`;
+
+  menu.classList.toggle('open', !!open);
+  if (input) input.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function fsAdd(id) {
+  if (!FS_PICKED.includes(id)) FS_PICKED.push(id);
+  const input = document.getElementById('fsSearch');
+  if (input) { input.value = ''; input.focus(); }
+  FS_ACTIVE = -1;
+  fsRenderChips();
+  fsRenderMenu(true);
+}
+
+function fsRemove(id) {
+  FS_PICKED = FS_PICKED.filter(x => x !== id);
+  fsRenderChips();
+  fsRenderMenu(document.getElementById('fsMenu')?.classList.contains('open'));
+}
+
+function fsKey(e) {
+  const rows = fsMatches();
+  if (e.key === 'ArrowDown')      { e.preventDefault(); FS_ACTIVE = Math.min(FS_ACTIVE + 1, rows.length - 1); fsRenderMenu(true); }
+  else if (e.key === 'ArrowUp')   { e.preventDefault(); FS_ACTIVE = Math.max(FS_ACTIVE - 1, 0); fsRenderMenu(true); }
+  else if (e.key === 'Enter')     { e.preventDefault(); if (rows[FS_ACTIVE]) fsAdd(rows[FS_ACTIVE]._id); }
+  else if (e.key === 'Escape')    { fsRenderMenu(false); }
+  // Backspace on an empty box removes the last chip — the behaviour people
+  // expect from a token field, and the only way to undo without the mouse.
+  else if (e.key === 'Backspace' && !e.target.value && FS_PICKED.length) {
+    fsRemove(FS_PICKED[FS_PICKED.length - 1]);
+  }
+}
+
 async function buildComposer() {
   const cfg = await fileConfig();
   const box = document.getElementById('fileComposer');
@@ -4168,12 +4299,18 @@ async function buildComposer() {
 
   box.innerHTML = `
     <div class="form-group">
-      <label class="form-label">Send to</label>
+      <label class="form-label" id="fsToLabel">Send to</label>
       ${people.length
-        ? `<select class="form-input" id="fsTo" multiple size="${Math.min(6, Math.max(3, people.length))}">
-             ${people.map(u => `<option value="${u._id}">${esc(u.name)} — ${esc(u.designation || u.role)}</option>`).join('')}
-           </select>
-           <div class="file-hint" style="margin-top:5px">Hold Ctrl (or Cmd) to select more than one person.</div>`
+        ? `<div class="picker" id="fsPicker">
+             <div class="picker-field" onclick="document.getElementById('fsSearch').focus()">
+               <span id="fsChips"></span>
+               <input class="picker-input" id="fsSearch" autocomplete="off"
+                      role="combobox" aria-expanded="false" aria-controls="fsMenu" aria-labelledby="fsToLabel"
+                      placeholder="Search for a person…">
+             </div>
+             <div class="picker-menu" id="fsMenu" role="listbox"></div>
+           </div>
+           <div class="file-hint" style="margin-top:5px">Pick one, or keep going to add more.</div>`
         : `<div class="file-empty">No recipients available to you.</div>`}
     </div>
     <div class="form-group">
@@ -4186,15 +4323,31 @@ async function buildComposer() {
       <div class="file-hint" style="margin-top:5px" id="fsHint">Max ${cfg.maxMb} MB · ${cfg.allowedExts}</div>
     </div>
     <button class="btn btn-primary" onclick="sendFile()" ${people.length ? '' : 'disabled'}>${IC.send} Send file</button>`;
+
+  // Wired here rather than with inline handlers: the menu has to close on an
+  // outside click, which needs a document listener regardless.
+  FS_PEOPLE = people;
+  FS_PICKED = [];
+  FS_ACTIVE = -1;
+
+  const input = document.getElementById('fsSearch');
+  if (input) {
+    input.addEventListener('input', () => { FS_ACTIVE = 0; fsRenderMenu(true); });
+    input.addEventListener('focus', () => { FS_ACTIVE = 0; fsRenderMenu(true); });
+    input.addEventListener('keydown', fsKey);
+    document.addEventListener('click', e => {
+      if (!document.getElementById('fsPicker')?.contains(e.target)) fsRenderMenu(false);
+    });
+    fsRenderChips();
+  }
 }
 
 async function sendFile() {
-  const sel  = document.getElementById('fsTo');
   const note = document.getElementById('fsNote').value.trim();
   const file = document.getElementById('fsFile').files?.[0];
   const hint = document.getElementById('fsHint');
 
-  const recipients = sel ? [...sel.selectedOptions].map(o => o.value) : [];
+  const recipients = [...FS_PICKED];
   if (!recipients.length) { toast('No recipient', 'Choose at least one person.', 'warning'); return; }
   if (!file)              { toast('No file', 'Choose a file to send.', 'warning'); return; }
 
