@@ -4085,10 +4085,40 @@ async function doUpload(file, meta, onProgress) {
     xhr.upload.onprogress = e => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
     };
-    xhr.onload  = () => (xhr.status >= 200 && xhr.status < 300)
-      ? resolve()
-      : reject(new Error(`Upload rejected by storage (${xhr.status}).`));
-    xhr.onerror = () => reject(new Error('Upload failed — check your connection.'));
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return resolve();
+
+      // S3 answers a rejection with an XML <Error><Code>..</Code></Error>.
+      // Without reading it every failure looks like a bare status code, which
+      // is useless — a bad secret and an oversized file both show as 403/400.
+      let code = '', msg = '';
+      try {
+        const doc = new DOMParser().parseFromString(xhr.responseText || '', 'text/xml');
+        code = doc.querySelector('Code')?.textContent || '';
+        msg  = doc.querySelector('Message')?.textContent || '';
+      } catch (e) { /* not XML — fall back to the status code */ }
+
+      const HINTS = {
+        SignatureDoesNotMatch: 'AWS_SECRET_ACCESS_KEY on the server is wrong or has a stray space.',
+        InvalidAccessKeyId:    'AWS_ACCESS_KEY_ID on the server does not match an existing key.',
+        AccessDenied:          'The IAM user is not allowed to write to this bucket.',
+        EntityTooLarge:        'The file is larger than the upload limit.',
+        EntityTooSmall:        'The file is empty.',
+        ExpiredToken:          'The upload link expired — try again.',
+        NoSuchBucket:          'S3_BUCKET on the server names a bucket that does not exist.',
+      };
+
+      reject(new Error(
+        code
+          ? `${code}${HINTS[code] ? ' — ' + HINTS[code] : (msg ? ': ' + msg : '')}`
+          : `Storage rejected the upload (HTTP ${xhr.status}).`
+      ));
+    };
+    // status 0 with no response is the signature of a blocked CORS preflight,
+    // which is a different problem from the server refusing the upload.
+    xhr.onerror = () => reject(new Error(
+      'Could not reach storage. If this persists it is usually the bucket CORS rule not listing this site.'
+    ));
     xhr.send(form);
   });
 
