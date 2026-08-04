@@ -181,7 +181,11 @@ async function trend(endPeriod, months = 6, { userFilter = {}, groupByDepartment
     }));
   }
 
-  const deptIds = [...new Set(rows.map(r => String(r._id.dept)).filter(Boolean))];
+  // Drop the nulls BEFORE stringifying. Employees without a department group
+  // under a null key, and String(null) is the truthy string "null", which
+  // survives filter(Boolean) and then fails to cast to an ObjectId — a 500 for
+  // the whole dashboard because one person has no department set.
+  const deptIds = [...new Set(rows.map(r => r._id.dept).filter(Boolean).map(String))];
   const depts = await require('../../models/Department')
     .find({ _id: { $in: deptIds } }).select('name color').lean();
   const deptMap = new Map(depts.map(d => [String(d._id), d]));
