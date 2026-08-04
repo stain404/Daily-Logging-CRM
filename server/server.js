@@ -19,6 +19,7 @@ const auditRoutes  = require('./routes/audit');
 const notifRoutes  = require('./routes/notifications');
 const emailRoutes  = require('./routes/emails');
 const attachRoutes = require('./routes/attachments');
+const kpiRoutes    = require('./routes/kpi');
 
 const app = express();
 
@@ -60,6 +61,7 @@ app.use('/api/audit',       auditRoutes);
 app.use('/api/notifications', notifRoutes);
 app.use('/api/emails',      emailRoutes);
 app.use('/api/attachments', attachRoutes);
+app.use('/api/kpi',         kpiRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) =>
@@ -80,6 +82,18 @@ mongoose
     console.log('✅  MongoDB connected');
     if (process.env.SEED_DB === 'true') {
       await seedDatabase();
+    }
+
+    // Separate from SEED_DB: that flag seeds demo users/tasks and is off in
+    // production, but the KPI module needs its scorecards to exist before it
+    // can score anyone. This only creates templates that are missing and never
+    // touches an edited one, so it is safe on every boot.
+    try {
+      const { seedKpiTemplates } = require('./services/kpi/seed');
+      await seedKpiTemplates();
+    } catch (err) {
+      // A template seeding failure must not stop the CRM from serving.
+      console.error('⚠️   KPI template seeding failed:', err.message);
     }
     app.listen(PORT, () =>
       console.log(`🚀  Server running on http://localhost:${PORT}`)
