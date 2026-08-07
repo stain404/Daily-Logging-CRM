@@ -59,12 +59,16 @@ function idOf(v) {
   return v._id ? v._id : v;
 }
 
+// Writes the row and hands the status back, so callers can tell whether a
+// message actually went out. notify() uses this to mark the matching in-app
+// notification as emailed.
 async function log(entry) {
   try {
     await EmailLog.create(entry);
   } catch (err) {
     console.error('[mailer] failed to write EmailLog:', err.message);
   }
+  return entry.status;
 }
 
 // ── Send one email to one user ────────────────────────────────────────
@@ -148,13 +152,19 @@ async function sendToUser(userRef, { type, task, render }) {
 
 // Fan one event out to many recipients. Deduplicated, and the actor is never
 // emailed about their own action — same rule notify() applies in-app.
+// Returns the ids of the people a message actually reached, so the caller can
+// distinguish "we emailed them" from "we decided not to". A dry-run counts:
+// the message was composed and would have gone out but for the master switch.
 async function sendToUsers(userRefs, actorRef, opts) {
   const actorId = idOf(actorRef)?.toString();
   const unique = [...new Set(
     userRefs.map(idOf).filter(Boolean).map(id => id.toString())
   )].filter(id => id !== actorId);
 
-  return Promise.all(unique.map(id => sendToUser(id, opts)));
+  const results = await Promise.all(
+    unique.map(async id => ({ id, status: await sendToUser(id, opts) }))
+  );
+  return results.filter(r => r.status === 'sent').map(r => r.id);
 }
 
 module.exports = { sendToUser, sendToUsers, taskUrl, isMandatory, ENABLED, PREF_KEY, REVIEW_ROLES };

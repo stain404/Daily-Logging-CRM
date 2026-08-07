@@ -1357,6 +1357,14 @@
     }
     .file-input::file-selector-button:hover { border-color: var(--accent); color: var(--accent-ink); }
 
+    /* Shown only when the same event actually reached the person's inbox, so
+       its absence is meaningful too — no address, opted out, or sending off. */
+    .notif-emailed {
+      display: inline-flex; align-items: center; gap: 5px; margin-top: 7px;
+      font-size: 11px; font-weight: 600; color: var(--text-muted);
+    }
+    .notif-emailed svg { width: 12px; height: 12px; }
+
     /* ── Recipient picker ─────────────────────────────────────────────
        Replaces a native <select multiple>, which renders in OS chrome that
        ignores the theme entirely and hides multi-select behind Ctrl+click.
@@ -1657,6 +1665,7 @@ const IC = {
   paperclip:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`,
   send:          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`,
   inbox:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>`,
+  mail:          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>`,
 };
 
 // ═══════════════════════════════════════════════════════
@@ -4007,6 +4016,7 @@ async function rdNotifs() {
                   <span class="notif-time">${timeAgo(n.createdAt)}</span>
                 </div>
                 <div class="notif-msg">${esc(n.message || '')}</div>
+                ${n.emailed ? `<div class="notif-emailed" title="A copy of this was emailed to you">${IC.mail} Emailed to you</div>` : ''}
               </div>`).join('')
           : `<div class="empty"><div class="empty-icon">${IC.notifications}</div><div class="empty-title">No notifications</div><div class="empty-sub">You're all caught up!</div></div>`}
       </div>

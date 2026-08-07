@@ -45,9 +45,11 @@ async function notify(recipientIds, { type, title, message, task, actor, severit
       recipientIds.filter(Boolean).map(id => id.toString())
     )].filter(id => id !== actorStr);
 
-    if (!unique.length) return;
+    if (!unique.length) return [];
 
-    await Notification.insertMany(unique.map(user => ({
+    // Returned so the caller can flip `emailed` on the right rows once the
+    // send resolves — see markEmailed below.
+    return await Notification.insertMany(unique.map(user => ({
       user, type, title,
       message:  message  || '',
       task:     task     || undefined,
@@ -56,6 +58,22 @@ async function notify(recipientIds, { type, title, message, task, actor, severit
     })));
   } catch (err) {
     console.error('[notify] failed to write notifications:', err.message);
+    return [];
+  }
+}
+
+// Flip `emailed` on the notifications belonging to people the email actually
+// reached. Done as a second write rather than by awaiting the send first, so
+// the bell never waits on SES — a slow provider would otherwise delay the
+// in-app alert, which is the one that has to be instant.
+async function markEmailed(docs, emailedIds) {
+  try {
+    if (!docs?.length || !emailedIds?.length) return;
+    const reached = new Set(emailedIds.map(String));
+    const ids = docs.filter(d => reached.has(d.user.toString())).map(d => d._id);
+    if (ids.length) await Notification.updateMany({ _id: { $in: ids } }, { emailed: true });
+  } catch (err) {
+    console.error('[notify] failed to mark notifications as emailed:', err.message);
   }
 }
 
@@ -91,7 +109,8 @@ async function taskAssigned(task, actor, actorName) {
     }),
   });
 
-  return Promise.all([inApp, email]);
+  const [docs, emailedIds] = await Promise.all([inApp, email]);
+  return markEmailed(docs, emailedIds);
 }
 
 // An employee submitted work. Goes to their supervisors and to the CEO.
@@ -116,7 +135,8 @@ async function taskSubmitted(task, actor, actorName, { late = false } = {}) {
     }),
   });
 
-  return Promise.all([inApp, email]);
+  const [docs, emailedIds] = await Promise.all([inApp, email]);
+  return markEmailed(docs, emailedIds);
 }
 
 // A manager reviewed a submission. Goes to the task owner and to the CEO.
@@ -151,7 +171,8 @@ async function taskReviewed(task, actor, actorName, action) {
     }),
   });
 
-  return Promise.all([inApp, email]);
+  const [docs, emailedIds] = await Promise.all([inApp, email]);
+  return markEmailed(docs, emailedIds);
 }
 
 // Someone shared a file. In-app only: an email carrying a link to a file the
@@ -179,4 +200,4 @@ async function fileShared(attachment, actor, actorName) {
   });
 }
 
-module.exports = { notify, supervisorsOf, ceos, taskAssigned, taskSubmitted, taskReviewed, fileShared };
+module.exports = { notify, markEmailed, supervisorsOf, ceos, taskAssigned, taskSubmitted, taskReviewed, fileShared };

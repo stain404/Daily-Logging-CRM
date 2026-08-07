@@ -27,6 +27,13 @@ const NotificationSchema = new mongoose.Schema({
     default: 'info',
   },
   read: { type: Boolean, default: false },
+
+  // Whether this same event also went out as an email to this recipient.
+  // Set after the fact: the notification is written immediately so the bell
+  // is never waiting on SES, then flipped once the send resolves. Stays false
+  // when the person has no address, opted out, or sending is disabled — which
+  // is exactly what makes it worth showing.
+  emailed: { type: Boolean, default: false },
 }, { timestamps: true });
 
 // The only read pattern: this user's notifications, newest first.
