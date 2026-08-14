@@ -5,6 +5,7 @@ const User       = require('../models/User');
 const Team       = require('../models/Team');
 const Department = require('../models/Department');
 const { protect, authorize } = require('../middleware/auth');
+const { orgToday, orgMonthStart } = require('../utils/orgTime');
 
 // ── GET /api/reports/employee?from=&to= ───────────────────────────────
 router.get('/employee', protect, authorize('hr', 'manager', 'admin', 'superadmin'), async (req, res) => {
@@ -148,9 +149,11 @@ router.get('/department', protect, authorize('hr', 'admin', 'superadmin'), async
 // tie-broken by average manager rating, then total completed.
 router.get('/employee-of-month', protect, authorize('hr', 'manager', 'admin', 'superadmin'), async (req, res) => {
   try {
-    const now        = new Date();
-    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    const todayStr   = now.toISOString().split('T')[0];
+    // Both ends of the range come from the same clock. Mixing a local
+    // month-start with a UTC "today" used to invert the range in the early
+    // hours of the 1st, silently returning no winner at all.
+    const monthStart = orgMonthStart();
+    const todayStr   = orgToday();
 
     const userQuery = { role: { $in: ['employee', 'manager'] } };
     if (req.user.role === 'manager') {

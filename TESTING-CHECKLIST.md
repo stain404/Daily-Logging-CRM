@@ -124,7 +124,7 @@ Probes:
 | ID | Test | Result | Bug / Notes |
 |---|---|---|---|
 | 4.1 | Manager assigns to own team member → member sees it, status `not-started` | | |
-| 4.2 | Manager assigns **outside** their team → 403 | | |
+| 4.2 | Manager assigns **outside** their team → 403 | PASS | QA Manager A → QA Employee B refused: "You can only assign tasks to members of your own team." |
 | 4.3 | Manager assigns to a **deactivated** user → currently allowed, decide if it should be | | |
 | 4.4 | Assign without `userId` / `title` / `project` → 400 | | |
 | 4.5 | Assign to a member who already has an entry that day → 400 with a message the manager can act on | | |
@@ -178,7 +178,7 @@ Build a known dataset first — e.g. one employee with exactly 4 tasks: 2 comple
 | 6.12 | Employee-of-month counts only the current month, needs ≥3 tasks to qualify | | |
 | 6.13 | Employee-of-month tie-break: 100% vs 100% → higher avg rating wins; still tied → more completed | | |
 | 6.14 | Nobody qualifies → `winner: null` and the UI shows an empty state, not a blank card | | |
-| 6.15 | Employee-of-month on the **1st of the month** → date range can invert, §10.7 | | |
+| 6.15 | Employee-of-month on the **1st of the month** → date range can invert, §10.7 | PASS | Cause fixed → **F3**; re-test on 1 Sep |
 | 6.16 | Dashboard `/stats/summary` today/week counts and status breakdown match the task list for the same user | | |
 | 6.17 | Dashboard `completionRate` is over **all** tasks ever, not the current filter — confirm intended (it only drifts downward over time) | | |
 | 6.18 | Same period reconciles across employee → team → department views | | |
@@ -252,20 +252,21 @@ Build a known dataset first — e.g. one employee with exactly 4 tasks: 2 comple
 
 Test these first. Each is concrete behaviour in the current code, not hypothetical.
 
-### 10.1 Dates are computed in UTC, but the office isn't
-`routes/tasks.js:80,120,185` use `new Date().toISOString().split('T')[0]` — the **UTC** date.
-Server in UTC (Render) + staff at UTC+3/+4 means that between midnight and ~4am local, the
-server still thinks it's yesterday.
+### 10.1 Dates were computed in UTC, but the office isn't — **FIXED**
+`routes/tasks.js:80,120,185` used `new Date().toISOString().split('T')[0]` — the **UTC** date.
+Server in UTC (Render) + staff at UTC+4 meant that between midnight and 04:00 local, the
+server still thought it was yesterday. Fixed via `utils/orgTime.js` → **F3**.
 
 | ID | Test | Result | Bug / Notes |
 |---|---|---|---|
-| 10.1a | Submit at 01:00 local → filed under today or yesterday? | | |
-| 10.1b | Is it **blocked as a duplicate** because yesterday's entry exists? | | |
-| 10.1c | Date shown in the UI (browser-local) matches the date stored on the server | | |
-| 10.1d | Assign default deadline `new Date(\`${date}T17:00\`)` (`tasks.js:199`) has no timezone suffix → parses as **server** local. Is "5pm" actually 9pm Gulf? | | |
-| 10.1e | Same off-by-a-day in the "7 days ago" window in `/stats/summary` | | |
+| 10.1a | Submit at 01:00 local → filed under today or yesterday? | PASS | Was yesterday, now today → **F3** |
+| 10.1b | Is it **blocked as a duplicate** because yesterday's entry exists? | PASS | Cause removed by F3; re-test at a real 01:00 |
+| 10.1c | Date shown in the UI (browser-local) matches the date stored on the server | | Still untested — needs a browser at 01:00 UAE |
+| 10.1d | Assign default deadline had no timezone suffix → parsed as **server** local. Was "5pm" actually 9pm Gulf? | PASS | Yes, was 21:00 Dubai. Now 13:00Z = 17:00 Dubai → **F3** |
+| 10.1e | Same off-by-a-day in the "7 days ago" window in `/stats/summary` | PASS | Now `orgDaysAgo(7)` → **F3** |
 
-**Fix direction:** one org timezone in config; derive "today" and default deadlines from it everywhere.
+**Fix applied:** one org timezone in config (`ORG_TZ`, default `Asia/Dubai`); "today" and default
+deadlines derive from it everywhere.
 
 ### 10.2 A manager can reach outside their own team
 Scoping is enforced on some endpoints and not others.
@@ -326,7 +327,7 @@ and the audit trail won't make that obvious.
 
 | ID | Test | Result | Bug / Notes |
 |---|---|---|---|
-| 10.7a | On the 1st, early local hours → range becomes `gte: 2026-09-01, lte: 2026-08-31` → empty. Does the card degrade gracefully? | | |
+| 10.7a | On the 1st, early local hours → range becomes `gte: 2026-09-01, lte: 2026-08-31` → empty. Does the card degrade gracefully? | PASS | Both ends now from one clock → **F3** |
 
 ### 10.8 Other things worth a look
 
@@ -405,7 +406,43 @@ with a malformed ObjectId — **all** return a JSON 401, none a 500 or stack tra
 
 UI handling of a 401 was a separate concern — see F1.
 
-### F3 — *(next finding)*
+### F3 — Server computed dates in UTC, office is UTC+4 *(§10.1, 6.15, 10.7 — fixed)*
+
+**Two separate symptoms, one cause.** Every "what day is it" and "when is 5pm" decision used the
+server's UTC clock instead of the organisation's.
+
+1. **Wrong day for late-night entries.** `routes/tasks.js:80,120,185` used
+   `new Date().toISOString().split('T')[0]`. At 01:00 in Dubai on 14 Aug the instant is
+   `2026-08-13T21:00Z`, so the server derived `2026-08-13`. A daily update filed any time
+   between midnight and 04:00 local was stamped with the previous day — and if the employee had
+   already logged that previous day, the one-per-day check rejected it as a duplicate.
+2. **Deadlines four hours late.** `tasks.js:199` built the default deadline as
+   `new Date(\`${targetDate}T17:00\`)` with no timezone suffix, so it parsed in *server* local
+   time. On a UTC host, a "5pm" deadline was stored as `17:00Z` = **21:00 Dubai**. Every
+   assigned task's deadline, and therefore every late/on-time judgement and the proximity dot,
+   was off by four hours.
+3. `reports.js:152` mixed the two clocks in one query — local `getFullYear()/getMonth()` for
+   `monthStart`, UTC for `todayStr`. In the early local hours of the 1st, the range inverted
+   (`gte: 2026-09-01, lte: 2026-08-31`) and employee-of-month silently returned no winner.
+
+**Fix:** new `server/utils/orgTime.js` owns all of it — `orgToday()`, `orgDaysAgo()`,
+`orgMonthStart()`, `orgTimeToDate(dateStr, 'HH:MM')`. Zone comes from `ORG_TZ`
+(default `Asia/Dubai`) so it's config, not a hardcoded `+4`; the offset is read from the zone
+via `Intl` `longOffset`, so a zone *with* DST stays correct. Six call sites migrated across
+`routes/tasks.js` (including the `isLate` fallback, which reads `endTime` — a wall clock the
+employee typed, not a UTC instant) and `routes/reports.js`.
+
+**Verified** against the running server on `taskflow_test`:
+- `orgDateStr(2026-08-13T21:00Z)` → `2026-08-14` (old code: `2026-08-13`).
+- Assigned a task with no `dueDate` → stored `2026-08-20T13:00Z`, reads **17:00 Dubai**
+  (old code: 21:00 Dubai).
+- Submitted a daily update → dated `2026-08-14`, matching local UAE date.
+- Edge cases: unparseable date → `Invalid Date` (callers' existing `isNaN` guard still works);
+  missing time → defaults to 17:00; `00:00` → previous day 20:00Z, correct.
+
+**Not covered by this fix:** the client also computes dates in browser-local time. That agrees
+with the server for anyone physically in the UAE, but a user travelling or with a misconfigured
+machine clock will still disagree with the server. See 10.1c.
 
 ---
 

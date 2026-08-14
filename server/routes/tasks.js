@@ -5,13 +5,16 @@ const Team    = require('../models/Team');
 const Audit   = require('../models/Audit');
 const { protect, authorize } = require('../middleware/auth');
 const { taskAssigned, taskSubmitted, taskReviewed } = require('../services/notify');
+const { orgToday, orgDaysAgo, orgTimeToDate } = require('../utils/orgTime');
 
 // ── Helper: is this task past its deadline right now? ────────────────
-// Falls back to date + endTime for rows created before dueDate existed.
+// Falls back to date + endTime for rows created before dueDate existed. The
+// fallback is read in the org's timezone — endTime is a wall clock the employee
+// typed, not a UTC instant.
 function isLate(task, at = new Date()) {
   const deadline = task.dueDate
     ? new Date(task.dueDate)
-    : new Date(`${task.date}T${task.endTime || '17:00'}`);
+    : orgTimeToDate(task.date, task.endTime || '17:00');
   return !isNaN(deadline) && at > deadline;
 }
 
@@ -77,8 +80,8 @@ router.get('/', protect, async (req, res) => {
 router.get('/stats/summary', protect, async (req, res) => {
   try {
     const query   = await getTaskQuery(req.user);
-    const todayStr = new Date().toISOString().split('T')[0];
-    const weekAgo  = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+    const todayStr = orgToday();
+    const weekAgo  = orgDaysAgo(7);
 
     const [total, todayCount, weekCount, byStatus] = await Promise.all([
       Task.countDocuments(query),
@@ -117,7 +120,7 @@ router.get('/stats/summary', protect, async (req, res) => {
 // ── POST /api/tasks ───────────────────────────────────────────────────
 router.post('/', protect, async (req, res) => {
   try {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = orgToday();
 
     // One submission per employee per day
     const existing = await Task.findOne({ userId: req.user._id, date: todayStr });
@@ -182,7 +185,7 @@ router.post('/assign', protect, authorize('manager', 'admin', 'superadmin'), asy
       }
     }
 
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || orgToday();
 
     const existing = await Task.findOne({ userId, date: targetDate });
     if (existing) {
@@ -196,7 +199,8 @@ router.post('/assign', protect, authorize('manager', 'admin', 'superadmin'), asy
       hours:       hours       || 0,
       // Default the deadline to end of the working day the task covers, so
       // every assigned task has a real dueDate even if the form omits one.
-      dueDate:     dueDate ? new Date(dueDate) : new Date(`${targetDate}T17:00`),
+      // 17:00 means 17:00 in the office, not 17:00 UTC.
+      dueDate:     dueDate ? new Date(dueDate) : orgTimeToDate(targetDate, '17:00'),
       status:      'not-started',
       completion:  0,
       assignedBy:  req.user._id,
