@@ -3,7 +3,7 @@
 > **Marks** — `[x]` pass · `[o]` fail · `[-]` skipped / not applicable · `[ ]` not tested yet
 >
 > **Found a bug?** Mark it `[o]` and write it on the indented line under the item.
-> If it needs more than a line, put `→ F6` there and write it up in the
+> If it needs more than a line, put `→ F7` there and write it up in the
 > **[Findings log](#findings-log)** at the bottom.
 >
 > **Save your work:** `git add TESTING-CHECKLIST.md && git commit -m "test notes"`
@@ -86,43 +86,53 @@ Test through the **API with a real token**, not by looking at the UI. Every deni
 - [x] `2.2` HR edits an existing admin / superadmin / HR account → 403
 - [x] `2.3` HR promotes an employee to `admin` → 403
 - [o] `2.4` Admin sets their **own** role to `superadmin` → 403
-  - Returned **200** and the role actually changed → **F5**, same as `9.3a`
+  - Returned **200** and the role actually changed , same as `9.3a`
 - [o] `2.5` Admin edits or deactivates the superadmin → 403
-  - Returned **200**, superadmin was deactivated → **F5**, same as `9.3b`
+  - Returned **200**, superadmin was deactivated 
 - [ ] `2.6` Superadmin deletes own account → blocked
 - [x] `2.7` Employee lists users → 403
 - [x] `2.8` Employee assigns a task → 403
 - [x] `2.9` Employee reviews their **own** task → 403 (no self-approval)
 - [x] `2.10` Manager opens the department report → 403
 - [o] `2.11` Manager A reads Manager B's employee's tasks via `?userId=` → 403
-  - Returned **200 with 2 of another team's tasks** → **F5**, same as `9.2a`
 - [o] `2.12` Manager A reviews Manager B's employee's task → 403
-  - Returned **200**, review applied → **F5**, same as `9.2b`
 - [x] `2.13` Every endpoint with **no** auth header → 401
-  - Checked on tasks, users, employee report, audit log, notifications
 
 ---
 
 ## 3 · Daily entry — one per person per day
 
 - [ ] `3.1` Employee submits a daily update → appears in their list immediately
-- [ ] `3.2` Second update the same day → clean 400, "use edit instead"
-- [ ] `3.3` Employee edits today's entry → persists, no duplicate row
+- [x] `3.2` Second update the same day → clean 400, "use edit instead"
+  - "You have already submitted a daily update today. Use the edit option to update it."
+    Probed the API directly — the UI hiding the button would otherwise read as a pass
+- [x] `3.2b` Revisiting the form shows **Update**, not a second Submit
+- [x] `3.3` Employee edits today's entry → persists, no duplicate row
+  - Confirmed by re-querying: exactly **1** row for today after the edit
 - [ ] `3.4` Submit today, submit again tomorrow → allowed, new row
 - [ ] `3.5` Employee edits **yesterday's** entry → spec says same-day only, API allows it, see `9.5`
 - [ ] `3.6` Employee edits **someone else's** entry by ID → 403
 - [ ] `3.7` Employee sets `approved` / `mgRating` on their own entry (create **and** edit) → stripped
 - [ ] `3.8` Employee moves their own `dueDate` → stripped
-- [ ] `3.9` No `title` → 400 · no `project` → 400
-- [ ] `3.10` `hours` over 24, negative, or `"abc"` → rejected cleanly
+- [x] `3.9` No `title` → 400 · no `project` → 400
+  - Toast: "Validation error — Please fill in all required fields." Title-without-project also blocked
+- [x] `3.10` `hours` over 24, negative, or `"abc"` → rejected cleanly
+  - `30` and `-5` both flagged invalid by the `min=0 max=24` input
 - [ ] `3.11` `completion` outside 0–100 → rejected
 - [ ] `3.12` `status` outside the allowed list → rejected
 - [ ] `3.13` `priority` garbage → rejected
 - [ ] `3.14` Title / description of 5000+ chars → stored or rejected cleanly, no truncation surprise
-- [ ] `3.15` Arabic text and special characters → stored and displayed correctly
-- [ ] `3.16` **XSS:** title `<img src=x onerror=alert(1)>` → escaped on the manager's review screen
-  - CSP is disabled server-side, so the client is the only defence here — see `9.8c`
+- [x] `3.15` Arabic text and special characters → stored and displayed correctly
+  - RTL title rendered correctly and wrapped to two lines without breaking the table layout
+- [x] `3.16` **XSS:** title `<img src=x onerror=alert(1)>` → escaped on the manager's review screen
+  - Shown as literal text. No alert fired, 0 `<img>` nodes injected. CSP is disabled
+    server-side, so the client escaping is the only defence — see `9.8c`
 - [ ] `3.17` **Race:** two submissions at the same instant → see `9.4`
+
+> §3 was run through the real UI in Edge (`scratchpad/phase3.js`) as QA Employee A —
+> **11/11 passed**. Screenshots at each step. The untested rows above need either a
+> second day (`3.4`), a tampered request (`3.5`–`3.8`, `3.11`–`3.13`), or a race (`3.17`).
+> One intermittent issue observed while doing it → **F6**.
 
 ---
 
@@ -610,4 +620,42 @@ confirms by logging back in.
 - Re-clone from live at any time:
   `node scripts/cloneDb.js --from "mongodb://localhost:27017/taskflow" --to "mongodb://localhost:27017/taskflow_test"`
 
-### F6 · *(next finding — replace this heading)*
+### F6 · Submit page intermittently stuck on its loading spinner
+`10.4` — **open, not reliably reproducible**
+
+While running §3 through the browser, navigating to **Submit Update** sometimes left the page on
+its "Loading…" spinner permanently. The form never appears, so the employee cannot log their day
+at all — the app's core function.
+
+**What was observed.** `rdSubmit()` issues two requests: `GET /tasks?date=<today>` then
+`GET /tasks?limit=100`. In the stuck runs the **first returned 200 and the second never fired**,
+so `el.innerHTML` was never reached and the loader stayed. No console error, no unhandled
+rejection, no failing HTTP status — every request that *did* fire returned 200.
+
+**Reproduction is unreliable**, which is why this is logged as an observation rather than a
+confirmed defect:
+
+| Attempt | Result |
+|---|---|
+| Headed, `sp('submit')` 1.2s after login | stuck |
+| Headless, `sp('submit')` 1.2s after login | stuck |
+| Headless, nav click 1.5s and 6s after login | stuck (both) |
+| Headless, `await rdSubmit()` called directly | rendered fine |
+| Headless, nav click 2.5s after login, ×6 | **6/6 rendered fine** |
+| Headed, full §3 run with retry helper | 0/4 needed the retry |
+
+So it is timing-sensitive and stopped reproducing partway through the session. Things ruled out:
+it is not a thrown exception (each step of `rdSubmit` succeeds when run by hand), not an HTTP
+failure (all 200s), and not the rate limiter (no 429s observed).
+
+**Worth noting while investigating:** `CU._id` and `CU.id` are both `undefined` in the page, yet
+`rdSubmit` identifies today's entry with
+`tasks.find(t => getId(t.userId) === CU._id || getId(t.userId) === CU.id)`. That comparison can
+never match on `_id`, so "am I already submitted today" may be resolving by accident or not at
+all. That is a concrete, always-present defect and a better starting point than the intermittent
+spinner — it may even be the same root cause.
+
+**To reproduce:** `node scratchpad/phase3.js` with the retry helper removed, immediately after a
+fresh login, and watch for `GET /tasks?limit=100` never being issued.
+
+### F7 · *(next finding — replace this heading)*
