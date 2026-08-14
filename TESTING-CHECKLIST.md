@@ -3,7 +3,7 @@
 > **Marks** — `[x]` pass · `[o]` fail · `[-]` skipped / not applicable · `[ ]` not tested yet
 >
 > **Found a bug?** Mark it `[o]` and write it on the indented line under the item.
-> If it needs more than a line, put `→ F4` there and write it up in the
+> If it needs more than a line, put `→ F5` there and write it up in the
 > **[Findings log](#findings-log)** at the bottom.
 >
 > **Save your work:** `git add TESTING-CHECKLIST.md && git commit -m "test notes"`
@@ -33,26 +33,25 @@
 
 ## 1 · Login & session
 
-- [ ] `1.1` Login with username + correct password
-- [ ] `1.2` Login with **empId** instead of username — both accepted
-- [ ] `1.3` Username case-insensitive, empId upper-cased — try `QA006`, `qa006`, `Qa006`
-- [ ] `1.4` Wrong password → generic "Invalid username or password", doesn't say which was wrong
-- [ ] `1.5` Non-existent user → same generic message
-- [ ] `1.6` Empty username or password → 400, not a crash
-- [ ] `1.7` Deactivated user cannot log in
+- [x] `1.1` Login with username + correct password
+- [x] `1.2` Login with **empId** instead of username — both accepted
+- [x] `1.3` Username case-insensitive, empId upper-cased — try `QA006`, `qa006`, `Qa006`
+- [x] `1.4` Wrong password → generic "Invalid username or password", doesn't say which was wrong
+- [x] `1.5` Non-existent user → same generic message
+- [x] `1.6` Empty username or password → 400, not a crash
+- [x] `1.7` Deactivated user cannot log in
 - [x] `1.8` Deactivate a user **while logged in** → next call 401s, UI returns them to login
-  - Bug found and fixed → **F1**
-- [ ] `1.9` `lastLogin` updates on each login
-- [ ] `1.10` Login writes an audit entry
-- [ ] `1.11` Token survives a page refresh; logout clears it
+- [x] `1.9` `lastLogin` updates on each login
+- [x] `1.10` Login writes an audit entry
+- [x] `1.11` Token survives a page refresh; logout clears it
 - [x] `1.12` Expired / garbage token → clean JSON 401, no stack trace
-  - Full rejection matrix tested → **F2**
-- [ ] `1.13` Change password: wrong current rejected; new password under 6 chars rejected
-- [ ] `1.14` After a password change the **old password** fails
-  - Note: the old token stays valid until expiry — decide if that's acceptable
-- [ ] `1.15` Set own email; an email another user already has → clean 400, not 500
-- [ ] `1.16` Set email to empty → clears it, doesn't collide with other blank-email users
-- [ ] `1.17` 100 wrong logins in a row — limit is 500/15min across all of `/api/`, nothing tighter on login
+- [x] `1.13` Change password: wrong current rejected; new password under 6 chars rejected
+- [x] `1.14` After a password change the **old password** fails
+- [x] `1.15` Set own email; an email another user already has → clean 400, not 500
+- [x] `1.16` Set email to empty → clears it, doesn't collide with other blank-email users
+- [o] `1.17` 100 wrong logins in a row — limit is 500/15min across all of `/api/`, nothing tighter on login
+- [o] `1.18` Email must be a real address — `hello`, `a@`, `@b.com` all rejected
+  - **Not validated anywhere.** Every malformed value is accepted and stored → **F4**
 
 ---
 
@@ -187,6 +186,9 @@ Build a known dataset first — e.g. one employee with exactly 4 tasks: 2 comple
 
 - [ ] `7.1` Duplicate `empId` → clean 400, not 500
 - [ ] `7.2` Duplicate `username` → clean 400 · duplicate `email` → clean 400
+- [o] `7.2b` HR / admin cannot save a malformed email on someone else's record
+  - Same missing validation as `1.18`, and the **edit-user** field has no `type="email"`
+    either, so the browser doesn't catch it → **F4**
 - [ ] `7.3` Create user with no `designation` → 400
 - [ ] `7.4` Password under 6 chars → rejected
 - [ ] `7.5` New user can log in immediately with the password set
@@ -217,6 +219,8 @@ Build a known dataset first — e.g. one employee with exactly 4 tasks: 2 comple
 - [ ] `8.7` Reviewer turning "task submitted" off → saved, server overrides, UI shows it locked with a reason
 - [ ] `8.8` `qa.orphan` has no email → in-app still works, no crash, prefs screen says email won't apply
 - [ ] `8.9` Bounced address → no further sends attempted
+- [o] `8.9b` A malformed address is never handed to SES
+  - The mailer checks only *presence* and `emailBounced`, never format → **F4**
 - [ ] `8.10` Break SMTP creds → task submission **still succeeds**
   - Email must never fail the user's action
 - [ ] `8.11` Email log records sends; admin / superadmin only
@@ -433,7 +437,84 @@ missing time → defaults to 17:00; `00:00` → previous day 20:00Z, correct.
 server for anyone physically in the UAE, but a travelling user or a wrong machine clock will
 still disagree. Tracked as `9.1c`.
 
-### F4 · *(next finding — replace this heading)*
+### F4 · Email addresses are never validated
+`1.18`, `7.2b`, `8.9b` — **open**
+
+**Found by:** entering a plain word with no `@domain.com` in the email field and having it saved.
+
+Confirmed: there is **no email format validation anywhere in the stack**.
+
+**Server** — `models/User.js:14` declares `email` as `type: String` with `unique`, `sparse`,
+`lowercase` and `trim`, but **no `match` validator**. So `runValidators: true` on the update
+routes has nothing to run. Every route that writes an email is affected:
+`PUT /api/auth/profile` (self-service), `POST /api/users` and `PUT /api/users/:id` (HR / admin
+setting someone else's).
+
+Tested against `PUT /api/auth/profile` — all eight accepted and stored verbatim:
+
+| Sent | Stored |
+|---|---|
+| `hello` | `hello` |
+| `notanemail` | `notanemail` |
+| `a@` | `a@` |
+| `@b.com` | `@b.com` |
+| `x y z` | `x y z` |
+| `javascript:alert(1)` | `javascript:alert(1)` |
+| `admin@` | `admin@` |
+| `....` | `....` |
+
+**Client** — inconsistent, and not a real defence anyway:
+- `client/index.html:3284` (new user) — has `type="email"`
+- `client/index.html:4586` (own profile) — has `type="email"`
+- `client/index.html:3342` (**edit user**) — plain `<input>`, **no `type="email"` at all**
+
+Even on the two that have it, `type="email"` only blocks a native form submit; if the handler
+reads `.value` directly without calling `.checkValidity()`, the browser never intervenes. So the
+edit-user field has neither client nor server validation.
+
+**Why it matters — three consequences, worst first:**
+
+1. **SES sending reputation.** `services/mailer.js:93,98` checks only that an address *exists*
+   and that `emailBounced` isn't set — never that it's well-formed. A value like `hello` goes
+   straight into `Destination: { ToAddresses: ['hello'] }`. Every notification to that user is a
+   guaranteed hard bounce, and `models/User.js:51` already records why that's bad: bounces are
+   what damage a sending domain's reputation and can put SES back in its sandbox.
+2. **Silent non-delivery.** `GET /api/users/me/notification-prefs` reports
+   `hasEmail: Boolean(req.user.email)`, so `hello` reads as `true`. The UI tells the user their
+   email notifications are active while nothing can ever be delivered — the exact case `8.8` was
+   written to catch, but inverted.
+3. **The unique index becomes meaningless.** `email` is `unique + sparse`, so junk values occupy
+   the index and a typo like `admin@` permanently blocks the real `admin@…` from being saved by
+   anyone else.
+
+**Fix direction** — validate in the model so every route inherits it, rather than patching each
+route:
+
+```js
+email: {
+  type: String, unique: true, sparse: true,
+  lowercase: true, trim: true,
+  set: v => (v === '' ? undefined : v),
+  match: [/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, 'Please provide a valid email address.'],
+},
+```
+
+Then: add `type="email"` to the edit-user input at `3342`, and have the mailer skip and log
+`skipped-invalid-address` rather than handing a bad value to SES. Note the routes must surface the
+`ValidationError` as a clean 400 — `PUT /api/auth/profile` currently only special-cases the
+duplicate-key `11000`, so a validation failure would fall through to a 500.
+
+**Existing data — already checked.** Scanned both databases before recommending the validator, so
+adding it won't make any current user unsaveable:
+
+- `taskflow` (real records): 5 users have an email, **0 malformed** — safe to add the validator.
+- `taskflow_test`: 2 malformed, both from testing (`QA001` → `test`, `QA006` → `....`).
+  `QA006` cleaned up; `QA001` left in place as a fixture for re-testing.
+
+Re-run the scan any time before deploying the validator:
+`db.users.find({ email: { $exists: true, $not: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/ } }, { empId: 1, email: 1 })`
+
+### F5 · *(next finding — replace this heading)*
 
 ---
 
