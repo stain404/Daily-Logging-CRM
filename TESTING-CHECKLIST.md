@@ -3,7 +3,7 @@
 > **Marks** — `[x]` pass · `[o]` fail · `[-]` skipped / not applicable · `[ ]` not tested yet
 >
 > **Found a bug?** Mark it `[o]` and write it on the indented line under the item.
-> If it needs more than a line, put `→ F5` there and write it up in the
+> If it needs more than a line, put `→ F6` there and write it up in the
 > **[Findings log](#findings-log)** at the bottom.
 >
 > **Save your work:** `git add TESTING-CHECKLIST.md && git commit -m "test notes"`
@@ -49,9 +49,9 @@
 - [x] `1.14` After a password change the **old password** fails
 - [x] `1.15` Set own email; an email another user already has → clean 400, not 500
 - [x] `1.16` Set email to empty → clears it, doesn't collide with other blank-email users
-- [o] `1.17` 100 wrong logins in a row — limit is 500/15min across all of `/api/`, nothing tighter on login
-- [o] `1.18` Email must be a real address — `hello`, `a@`, `@b.com` all rejected
-  - **Not validated anywhere.** Every malformed value is accepted and stored → **F4**
+- [x] `1.17` 100 wrong logins in a row — limit is 500/15min across all of `/api/`, nothing tighter on login
+- [x] `1.18` Email must be a real address — `hello`, `a@`, `@b.com` all rejected
+
 
 ---
 
@@ -59,37 +59,47 @@
 
 **Intended matrix** — the spec you're testing against:
 
-| Action | superadmin | admin | hr | manager | employee |
-|---|:---:|:---:|:---:|:---:|:---:|
-| See all tasks | all | all | own | own team | own |
-| Create / edit user | ✅ | ✅ | emp+mgr only | ❌ | ❌ |
-| Delete user | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Create / edit dept & team | ✅ | ✅ | ✅ | ❌ | ❌ |
-| Delete dept & team | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Edit team membership | ✅ | ✅ | ✅ | own team | ❌ |
-| Assign task | ✅ | ✅ | ❌ | own team | ❌ |
-| Review / rate | ✅ | ✅ | ❌ | own team | ❌ |
-| Delete task | ✅ | ✅ | ❌ | own team | ❌ |
-| Company-wide reports | ✅ | ✅ | ✅ | ❌ | ❌ |
-| Audit log | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Email log / test email | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Action                    | superadmin | admin |  hr           |  manager  | employee |
+|---------------------------|:----------:|:-----:|:-------------:|:---------:|:--------:|
+| See all tasks             | all        | all   | own           | own team  |   own    |
+| Create / edit user        | ✅         | ✅   | emp+mgr only  | ❌        | ❌      |
+| Delete user               | ✅         | ❌   | ❌            | ❌        | ❌      |
+| Create / edit dept & team | ✅         | ✅   | ✅            | ❌        | ❌      |
+| Delete dept & team        | ✅         | ❌   | ❌            | ❌        | ❌      |
+| Edit team membership      | ✅         | ✅   | ✅            | own team  | ❌      |
+| Assign task               | ✅         | ✅   | ❌            | own team  | ❌      |
+| Review / rate             | ✅         | ✅   | ❌            | own team  | ❌      |
+| Delete task               | ✅         | ✅   | ❌            | own team  | ❌      |
+| Company-wide reports      | ✅         | ✅   | ✅            | ❌        | ❌      |
+| Audit log                 | ✅         | ✅   | ❌            | ❌        | ❌      |
+| Email log / test email    | ✅         | ✅   | ❌            | ❌        | ❌      |
 
 Test through the **API with a real token**, not by looking at the UI. Every denial must be
 403/401 **and** return no data.
 
-- [ ] `2.1` HR creates a user with `role: "admin"` → 403
-- [ ] `2.2` HR edits an existing admin / superadmin / HR account → 403
-- [ ] `2.3` HR promotes an employee to `admin` → 403
-- [ ] `2.4` Admin sets their **own** role to `superadmin` → **expected to succeed today**, see `9.3`
-- [ ] `2.5` Admin edits or deactivates the superadmin → decide the intended rule first
+> **Run these with one command:** `node scripts/permissionProbe.js` (app must be running).
+> It logs in as all 7 QA roles, asserts a status per endpoint, reverts every mutation it makes,
+> and prints the failures with their IDs. Re-run it after any permission change — that's `11.2`.
+> Marks below came from that run; **8 of 28 failed** → **F5**.
+
+- [x] `2.1` HR creates a user with `role: "admin"` → 403
+- [x] `2.2` HR edits an existing admin / superadmin / HR account → 403
+- [x] `2.3` HR promotes an employee to `admin` → 403
+- [o] `2.4` Admin sets their **own** role to `superadmin` → 403
+  - Returned **200** and the role actually changed → **F5**, same as `9.3a`
+- [o] `2.5` Admin edits or deactivates the superadmin → 403
+  - Returned **200**, superadmin was deactivated → **F5**, same as `9.3b`
 - [ ] `2.6` Superadmin deletes own account → blocked
-- [ ] `2.7` Employee lists users → 403
-- [ ] `2.8` Employee assigns a task → 403
-- [ ] `2.9` Employee reviews their **own** task → 403 (no self-approval)
-- [ ] `2.10` Manager opens the department report → 403
-- [ ] `2.11` Manager A reads Manager B's employee's tasks via `?userId=` → see `9.2`
-- [ ] `2.12` Manager A reviews Manager B's employee's task → see `9.2`
-- [ ] `2.13` Every endpoint with **no** auth header → 401
+- [x] `2.7` Employee lists users → 403
+- [x] `2.8` Employee assigns a task → 403
+- [x] `2.9` Employee reviews their **own** task → 403 (no self-approval)
+- [x] `2.10` Manager opens the department report → 403
+- [o] `2.11` Manager A reads Manager B's employee's tasks via `?userId=` → 403
+  - Returned **200 with 2 of another team's tasks** → **F5**, same as `9.2a`
+- [o] `2.12` Manager A reviews Manager B's employee's task → 403
+  - Returned **200**, review applied → **F5**, same as `9.2b`
+- [x] `2.13` Every endpoint with **no** auth header → 401
+  - Checked on tasks, users, employee report, audit log, notifications
 
 ---
 
@@ -165,7 +175,8 @@ Build a known dataset first — e.g. one employee with exactly 4 tasks: 2 comple
 - [ ] `6.5` Date range filters correctly; a task dated exactly `from` **is** included
 - [ ] `6.6` `from` later than `to` → empty result, not an error
 - [ ] `6.7` Manager's employee report shows **only** their own team
-- [ ] `6.8` Manager requests a report for someone outside their team → 403
+- [x] `6.8` Manager requests a report for someone outside their team → 403
+  - Correctly blocked — `reports.js` checks team membership, unlike `tasks.js` (`9.2a`)
 - [ ] `6.9` Team report member count is right; a 0-member team shows 0, not NaN
 - [ ] `6.10` Department report counts are right; an empty department doesn't crash
 - [ ] `6.11` A user with **no department** doesn't break or double-count the department report
@@ -264,14 +275,23 @@ was still yesterday.
 
 Scoping is enforced on some endpoints and missing on others.
 
-- [ ] `9.2a` `GET /api/tasks?userId=<anyone>` — `tasks.js:57` overwrites the team scope, so a
+Scoping is enforced on some endpoints and missing on others. **All six confirmed** by
+`node scripts/permissionProbe.js` → **F5**.
+
+- [o] `9.2a` `GET /api/tasks?userId=<anyone>` — `tasks.js:57` overwrites the team scope, so a
       manager reads **any** employee's entries company-wide
-- [ ] `9.2b` `PUT /api/tasks/:id/review` — **no team check at all**; Manager A can rate
+  - 200, returned 2 of Manager B's team's tasks to Manager A
+- [o] `9.2b` `PUT /api/tasks/:id/review` — **no team check at all**; Manager A can rate
       Manager B's team
-- [ ] `9.2c` `PUT /api/tasks/:id/clear-review` — same, no team check
-- [ ] `9.2d` `DELETE /api/tasks/:id` — any manager can delete any task in the company
-- [ ] `9.2e` `GET /api/users/:id/stats` — any manager pulls any employee's stats
-- [ ] `9.2f` `GET /api/users` — managers get the whole company roster
+  - 200, the review was applied
+- [o] `9.2c` `PUT /api/tasks/:id/clear-review` — same, no team check
+  - 200, another team's review wiped
+- [o] `9.2d` `DELETE /api/tasks/:id` — any manager can delete any task in the company
+  - 200, **the task was actually deleted**
+- [o] `9.2e` `GET /api/users/:id/stats` — any manager pulls any employee's stats
+  - 200, full stats body returned
+- [o] `9.2f` `GET /api/users` — managers get the whole company roster
+  - 200, **32 users** returned to a manager
 
 > Your own spec says a manager's world is their own team. Right now that only holds for the
 > list view and the reports.
@@ -279,9 +299,12 @@ Scoping is enforced on some endpoints and missing on others.
 ### 9.3 · An admin can promote themselves to superadmin
 
 `PUT /api/users/:id` guards **HR** against role changes; `admin` passes straight through.
+**Both confirmed** → **F5**.
 
-- [ ] `9.3a` As admin, set own role to `superadmin` → succeeds?
-- [ ] `9.3b` As admin, demote or deactivate the superadmin → succeeds?
+- [o] `9.3a` As admin, set own role to `superadmin`
+  - 200, and the role **actually changed**. Full system control by editing your own record
+- [o] `9.3b` As admin, demote or deactivate the superadmin
+  - 200, the owner's account was deactivated and locked out until restored
 
 ### 9.4 · Nothing at the database level enforces one entry per day
 
@@ -514,7 +537,60 @@ adding it won't make any current user unsaveable:
 Re-run the scan any time before deploying the validator:
 `db.users.find({ email: { $exists: true, $not: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/ } }, { empId: 1, email: 1 })`
 
-### F5 · *(next finding — replace this heading)*
+### F5 · Role boundaries not enforced: 8 of 28 permission probes failed
+`2.4`, `2.5`, `2.11`, `2.12`, `9.2a–f`, `9.3a–b` — **open**
+
+Run with `node scripts/permissionProbe.js` (from `server/`, app running). It logs in as all 7 QA
+roles, asserts an expected status per endpoint, reverts every mutation, and cleans up its fixtures.
+Result: **20/28 passed, 8 failed.**
+
+**Two independent holes.**
+
+**1 · An admin is effectively a superadmin.** `PUT /api/users/:id` (`users.js:185`) guards HR
+against role changes but lets `admin` through unchecked.
+
+| Probe | Expected | Actual |
+|---|---|---|
+| `9.3a` admin sets own role to `superadmin` | 403 | **200 — role changed** |
+| `9.3b` admin deactivates the superadmin | 403 | **200 — owner locked out** |
+
+`9.3a` means the admin/superadmin distinction doesn't exist in practice: any admin can grant
+themselves full control, including user deletion, by editing their own record. `9.3b` means an
+admin can lock the company owner out of their own system.
+
+**2 · Manager scoping is enforced on four endpoints and missing on six.** All six confirmed
+against live fixture data:
+
+| Probe | Endpoint | Actual |
+|---|---|---|
+| `9.2a` | `GET /api/tasks?userId=` | 200 — **2 of another team's tasks** |
+| `9.2b` | `PUT /tasks/:id/review` | 200 — review applied to another team |
+| `9.2c` | `PUT /tasks/:id/clear-review` | 200 — another team's review wiped |
+| `9.2d` | `DELETE /tasks/:id` | 200 — **task actually deleted** |
+| `9.2e` | `GET /users/:id/stats` | 200 — full stats body |
+| `9.2f` | `GET /api/users` | 200 — **32 users company-wide** |
+
+`9.2d` is the worst of these: any manager can permanently destroy any employee's record anywhere
+in the company, and the audit entry will name them as the deleter of a task they had no business
+seeing. `9.2a` is the read equivalent — the team scope is built correctly and then thrown away by
+`tasks.js:57`, which assigns `query.userId = userId` over the top of `{ $in: memberIds }`.
+
+**What passed** — worth stating, since it shows the pattern is inconsistent rather than absent:
+HR's limits all hold (`2.1`–`2.3`), employees are correctly blocked from listing users, assigning,
+and self-approving (`2.7`–`2.9`), managers can't reach the department report (`2.10`), all
+endpoints 401 without a token (`2.13`), and `reports.js` **does** check team membership
+(`6.8` passed) — which is exactly the check `tasks.js` is missing.
+
+**Fix direction** — the manager-scope check already exists in `tasks.js:177` for assignment and in
+`reports.js:21`. Extract it into one helper (`assertManagesTaskOwner(user, task)`) and apply it in
+`review`, `clear-review`, `delete`, and to the `?userId=` filter; scope `GET /api/users` and
+`/users/:id/stats` for managers. Separately, guard role and `active` changes in `users.js` so only
+a superadmin can grant `superadmin`/`admin` or deactivate one.
+
+**Note for whoever fixes this:** the probe's own revert step has to undo a deactivation using a
+*different* account's token — the deactivated account's token 401s immediately, so an undo signed
+by it silently fails and strands the fixture. The script now reverts with the admin token and
+confirms by logging back in.
 
 ---
 
@@ -533,3 +609,5 @@ Re-run the scan any time before deploying the validator:
   `QA`, so `db.users.deleteMany({ empId: /^QA/ })` cleans up
 - Re-clone from live at any time:
   `node scripts/cloneDb.js --from "mongodb://localhost:27017/taskflow" --to "mongodb://localhost:27017/taskflow_test"`
+
+### F6 · *(next finding — replace this heading)*
