@@ -22,22 +22,10 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 
+const { PEOPLE, DEPARTMENT, TEAM_NAME, NOTE, passwordFromArgv } = require('./qaRoster');
+
 const SAFE_TARGET = /(test|copy|scratch|staging|_clone)/i;
-
-const passwordArg = process.argv.find(a => a.startsWith('--password='));
-const PASSWORD = passwordArg ? passwordArg.slice('--password='.length) : 'QAtest123';
-
-const PEOPLE = [
-  { empId: 'QA001', username: 'qa.superadmin', name: 'QA Superadmin', role: 'superadmin', designation: 'QA Superadmin' },
-  { empId: 'QA002', username: 'qa.admin',      name: 'QA Admin',      role: 'admin',      designation: 'QA Admin' },
-  { empId: 'QA003', username: 'qa.hr',         name: 'QA HR',         role: 'hr',         designation: 'QA HR Officer' },
-  { empId: 'QA004', username: 'qa.manager.a',  name: 'QA Manager A',  role: 'manager',    designation: 'QA Manager A', team: 'A' },
-  { empId: 'QA005', username: 'qa.manager.b',  name: 'QA Manager B',  role: 'manager',    designation: 'QA Manager B', team: 'B' },
-  { empId: 'QA006', username: 'qa.employee.a', name: 'QA Employee A', role: 'employee',   designation: 'QA Employee A', team: 'A' },
-  { empId: 'QA007', username: 'qa.employee.b', name: 'QA Employee B', role: 'employee',   designation: 'QA Employee B', team: 'B' },
-  // Deliberately in no team at all — §7 asks whether their work is visible to anyone.
-  { empId: 'QA008', username: 'qa.orphan',     name: 'QA Orphan',     role: 'employee',   designation: 'QA Unassigned' },
-];
+const PASSWORD = passwordFromArgv(process.argv);
 
 async function run() {
   const uri = process.env.MONGODB_URI;
@@ -46,12 +34,6 @@ async function run() {
     process.exit(1);
   }
 
-  // Checked here rather than letting the model reject it, so a typo'd
-  // --password= fails before any account is written instead of halfway through.
-  if (PASSWORD.length < 6) {
-    console.error(`❌  Password "${PASSWORD}" is under the 6-character minimum the User model enforces.`);
-    process.exit(1);
-  }
 
   await mongoose.connect(uri);
   const dbName = mongoose.connection.name;
@@ -74,16 +56,16 @@ async function run() {
   const Department = require('../models/Department');
 
   const dept = await Department.findOneAndUpdate(
-    { name: 'QA Department' },
-    { name: 'QA Department', description: 'Throwaway department for checklist testing' },
+    { name: DEPARTMENT },
+    { name: DEPARTMENT, description: NOTE },
     { upsert: true, new: true, setDefaultsOnInsert: true },
   );
 
   const teams = {};
   for (const key of ['A', 'B']) {
     teams[key] = await Team.findOneAndUpdate(
-      { name: `QA Team ${key}` },
-      { name: `QA Team ${key}`, department: dept._id, description: 'Throwaway team for checklist testing' },
+      { name: TEAM_NAME(key) },
+      { name: TEAM_NAME(key), department: dept._id, description: NOTE },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     );
   }
