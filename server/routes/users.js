@@ -226,6 +226,57 @@ router.put('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (req, 
   }
 });
 
+// ── POST /api/users/:id/reset-password ────────────────────────────────
+// The way back in for someone who has forgotten their password. PUT /:id
+// strips `password` on purpose, and /auth/change-password needs the current
+// one, so without this route a forgotten password has no in-app remedy at all.
+//
+// Deliberately not an email link: EMAIL_ENABLED is false until the sending
+// domain is verified, so a mailed reset token would silently go nowhere. An
+// admin setting the password and passing it on is what works today.
+router.post('/:id/reset-password', protect, authorize('hr', 'admin', 'superadmin'), async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters.' });
+    }
+
+    const target = await User.findById(req.params.id).select('+password');
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    // Resetting someone's password is taking over their account, so the rules
+    // are tighter than for editing one. Only a superadmin can reset another
+    // superadmin — otherwise an admin could seize the top account, which is
+    // the same escalation §9.3a already reports through the role field.
+    if (target.role === 'superadmin' && req.user.role !== 'superadmin') {
+      return res.status(403).json({ success: false, message: 'Only a superadmin can reset a superadmin password.' });
+    }
+    if (req.user.role === 'hr' && !['employee', 'manager'].includes(target.role)) {
+      return res.status(403).json({ success: false, message: 'HR can only reset employee or manager passwords.' });
+    }
+
+    // save() so the pre-save hook hashes it — findByIdAndUpdate would store
+    // the password in plain text and login would then never match it.
+    target.password = newPassword;
+    await target.save();
+
+    await Audit.create({
+      user:     req.user._id,
+      userName: req.user.name,
+      action:   'Password Reset',
+      detail:   `Reset password for ${target.name} (${target.empId})`,
+      ip:       req.ip,
+    });
+
+    res.json({ success: true, message: `Password reset for ${target.name}.` });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── DELETE /api/users/:id ─────────────────────────────────────────────
 router.delete('/:id', protect, authorize('superadmin'), async (req, res) => {
   try {
