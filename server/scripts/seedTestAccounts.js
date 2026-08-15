@@ -3,11 +3,17 @@
 // scoping bugs (§10.2) only show up when manager A reaches for manager B's team.
 //
 // Run it against a CLONE, never the live database — it refuses to run unless
-// the db name looks like a test copy.
+// the db name looks like a test copy. --i-know-what-im-doing overrides that,
+// and should stay reserved for the rare case where the accounts are wanted on
+// live on purpose; see the cleanup line at the bottom of this comment.
 //
 // Usage (from the server/ folder):
 //   $env:MONGODB_URI="mongodb://localhost:27017/taskflow_test"
 //   node scripts/seedTestAccounts.js
+//
+// Password defaults to QAtest123 — the one §0 of the checklist documents.
+// Override for a one-off run without editing this file:
+//   node scripts/seedTestAccounts.js --password=test123
 //
 // Re-running is safe: existing QA rows are matched by empId and updated.
 // Everything it creates is prefixed QA / "QA " so you can find and remove it
@@ -17,7 +23,9 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 
 const SAFE_TARGET = /(test|copy|scratch|staging|_clone)/i;
-const PASSWORD = 'QAtest123';
+
+const passwordArg = process.argv.find(a => a.startsWith('--password='));
+const PASSWORD = passwordArg ? passwordArg.slice('--password='.length) : 'QAtest123';
 
 const PEOPLE = [
   { empId: 'QA001', username: 'qa.superadmin', name: 'QA Superadmin', role: 'superadmin', designation: 'QA Superadmin' },
@@ -38,14 +46,26 @@ async function run() {
     process.exit(1);
   }
 
+  // Checked here rather than letting the model reject it, so a typo'd
+  // --password= fails before any account is written instead of halfway through.
+  if (PASSWORD.length < 6) {
+    console.error(`❌  Password "${PASSWORD}" is under the 6-character minimum the User model enforces.`);
+    process.exit(1);
+  }
+
   await mongoose.connect(uri);
   const dbName = mongoose.connection.name;
 
-  if (!SAFE_TARGET.test(dbName) && !process.argv.includes('--i-know-what-im-doing')) {
-    console.error(`❌  Refusing to seed test accounts into "${dbName}" — that is not a test copy.`);
-    console.error('    Clone the database first: node scripts/cloneDb.js --from ... --to ...');
-    await mongoose.disconnect();
-    process.exit(1);
+  if (!SAFE_TARGET.test(dbName)) {
+    if (!process.argv.includes('--i-know-what-im-doing')) {
+      console.error(`❌  Refusing to seed test accounts into "${dbName}" — that is not a test copy.`);
+      console.error('    Clone the database first: node scripts/cloneDb.js --from ... --to ...');
+      await mongoose.disconnect();
+      process.exit(1);
+    }
+    console.warn(`\n⚠️   "${dbName}" is not a test copy — seeding into it anyway (--i-know-what-im-doing).`);
+    console.warn('    These are real logins on that database until they are removed:');
+    console.warn(`    db.users.deleteMany({ empId: /^QA/ }) and drop "QA Department" / "QA Team A" / "QA Team B".\n`);
   }
   console.log(`✅  Connected to ${dbName}`);
 
