@@ -542,6 +542,37 @@
     .input-icon-wrap svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--text-muted); pointer-events: none; }
     .input-icon-wrap .form-input { padding-left: 34px; }
 
+    /* Show/hide toggle on password fields, added by enhancePasswordFields().
+       The wrapper is its own element rather than .input-icon-wrap, because that
+       one owns the LEFT slot — its `svg` rule matches any descendant icon and
+       would drag this button's icon on top of the lock. Hence the explicit
+       reset below; without it the eye renders at left:11px, unclickable. */
+    .pw-wrap { position: relative; display: block; }
+    .pw-wrap .form-input { padding-right: 38px; }
+    .pw-reveal {
+      position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+      display: flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; padding: 0;
+      background: none; border: 0; border-radius: var(--radius);
+      color: var(--text-muted); cursor: pointer;
+    }
+    .pw-reveal:hover { color: var(--text-primary); background: var(--bg-raised); }
+    .pw-reveal:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    /* A button that reads as a link — used for "Forgot your password?" under
+       the sign-in button, where a full .btn would compete with it. */
+    .link-btn {
+      background: none; border: 0; padding: 2px 4px;
+      font-family: inherit; font-size: 12px; color: var(--text-muted);
+      cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+    }
+    .link-btn:hover { color: var(--accent); }
+
+    .pw-wrap .pw-reveal svg,
+    .input-icon-wrap .pw-reveal svg {
+      position: static; left: auto; top: auto; transform: none;
+      width: 15px; height: 15px; color: inherit; pointer-events: none;
+    }
+
     /* Slider */
     input[type="range"] {
       width: 100%; margin-top: 8px;
@@ -1534,6 +1565,10 @@
     </div>
     <button class="btn btn-primary btn-full btn-lg" id="loginBtn" onclick="doLogin()">Sign in to Al Quba</button>
 
+    <div style="text-align:center;margin-top:12px">
+      <button type="button" class="link-btn" onclick="forgotPasswordModal()">Forgot your password?</button>
+    </div>
+
     <div class="login-hint">
       <div style="display:flex;align-items:center;gap:6px;">
         <strong>API Status:</strong>
@@ -1642,6 +1677,8 @@ const IC = {
   settings:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
   plus:          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   eye:           `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  eyeOff:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`,
+  key:           `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/></svg>`,
   edit:          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
   trash:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
   check:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`,
@@ -1731,8 +1768,31 @@ async function apiFetch(method, path, body) {
   if (body) opts.body = JSON.stringify(body);
   const res  = await fetch(API_BASE + path, opts);
   const data = await res.json();
+
+  // A 401 on a request we signed means the session is over — the token expired
+  // (JWT_EXPIRE, 7d) or the account was deactivated mid-session. Without this the
+  // screen just reads "failed to load" and the user is stranded on a dead page.
+  // Only when we actually sent a token: a failed login is also a 401, and that
+  // one belongs to the login form, not here.
+  if (res.status === 401 && opts.headers.Authorization) {
+    handleSessionExpired(data.message);
+  }
+
   if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
   return data;
+}
+
+// Several panels load in parallel, so one dead token produces a burst of 401s.
+// Tear the session down on the first and let the rest fall through quietly.
+let sessionExpiryHandled = false;
+function handleSessionExpired(serverMessage) {
+  if (sessionExpiryHandled) return;
+  sessionExpiryHandled = true;
+  doLogout({
+    title: 'Session ended',
+    message: serverMessage || 'Your session has expired. Please sign in again.',
+    tone: 'warning',
+  });
 }
 const GET    = (path)       => apiFetch('GET',    path);
 const POST   = (path, body) => apiFetch('POST',   path, body);
@@ -2027,6 +2087,7 @@ async function doLogin() {
     const data = await POST('/auth/login', { username, password });
     TOKEN = data.token;
     CU    = data.user;
+    sessionExpiryHandled = false;   // fresh session — arm the 401 handler again
     localStorage.setItem('tf_token', TOKEN);
     localStorage.setItem('tf_user', JSON.stringify(CU));
     document.getElementById('loginWrap').style.display = 'none';
@@ -2047,7 +2108,9 @@ function showLoginErr(msg) {
   el.style.display = 'flex';
 }
 
-function doLogout() {
+// notice lets an involuntary logout (expired token, deactivated account) say so
+// instead of claiming the user signed themselves out.
+function doLogout(notice) {
   TOKEN = ''; CU = null;
   stopNotifPolling();
   localStorage.removeItem('tf_token');
@@ -2056,7 +2119,12 @@ function doLogout() {
   document.getElementById('loginWrap').style.display = 'flex';
   document.getElementById('lu').value = '';
   document.getElementById('lp').value = '';
-  toast('Signed out', 'You have been signed out.', 'info');
+  if (notice) {
+    showLoginErr(notice.message);
+    toast(notice.title, notice.message, notice.tone || 'info');
+  } else {
+    toast('Signed out', 'You have been signed out.', 'info');
+  }
 }
 
 // Auto-login on page load
@@ -3229,6 +3297,7 @@ async function loadEmpTable() {
           <td>${u.active ? `<span class="badge badge-green">${IC.check} Active</span>` : `<span class="badge badge-red">Inactive</span>`}</td>
           ${showActionsCol ? `<td><div class="tbl-actions">
             ${canEdit ? `<button class="btn btn-secondary btn-xs" onclick="editEmpModal('${u._id}')" title="Edit">${IC.edit}</button>` : ''}
+            ${canEdit ? `<button class="btn btn-secondary btn-xs" onclick="resetPwModal('${u._id}','${u.name.replace(/'/g, "\\'")}')" title="Reset password">${IC.key}</button>` : ''}
             ${isSA     ? `<button class="btn btn-danger btn-xs"    onclick="confirmDelEmp('${u._id}','${u.name}')" title="Delete">${IC.trash}</button>` : ''}
           </div></td>` : ''}
         </tr>`;
@@ -3347,6 +3416,58 @@ async function editEmpModal(id) {
           });
           closeModal(); toast('Employee updated', 'Changes saved successfully.', 'success'); loadEmpTable();
         } catch (e) { toast('Update failed', e.message, 'error'); }
+    }},
+  ]);
+}
+
+// Shown from the login screen. There is no self-serve reset link to offer:
+// EMAIL_ENABLED is false until the sending domain is verified, so a mailed
+// reset token would go nowhere and the user would wait for an email that never
+// arrives. Saying who can help is more honest than a dead "check your inbox".
+function forgotPasswordModal() {
+  openModal('Forgot your password?', `
+    <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:14px">
+      Passwords are reset by an administrator — there is no email reset link yet.
+    </p>
+    <ol style="font-size:13px;color:var(--text-secondary);line-height:1.7;padding-left:18px;margin-bottom:14px">
+      <li>Ask an admin or HR to reset it for you.</li>
+      <li>They set a temporary password and pass it to you directly.</li>
+      <li>Sign in, then change it under <strong>Profile → Change Password</strong>.</li>
+    </ol>
+    <div style="font-size:12px;color:var(--text-muted);border-top:1px solid var(--border);padding-top:12px">
+      If <em>every</em> admin account is locked out, the password has to be reset
+      from the server with <code style="font-family:var(--font-mono)">scripts/resetPassword.js</code>.
+    </div>
+  `, [{ label: 'Got it', cls: 'btn-primary', fn: closeModal }]);
+}
+
+// Admin-initiated reset — the counterpart to the note above.
+function resetPwModal(id, name) {
+  openModal(`Reset password — ${name}`, `
+    <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:14px">
+      Sets a new password for <strong>${name}</strong> immediately. Their current
+      password stops working, so pass the new one on to them.
+    </p>
+    <div class="form-group">
+      <label class="form-label">New Password</label>
+      <input class="form-input" type="password" id="rp_new" placeholder="At least 6 characters">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Confirm New Password</label>
+      <input class="form-input" type="password" id="rp_conf" placeholder="Repeat new password">
+    </div>
+  `, [
+    { label: 'Cancel', cls: 'btn-secondary', fn: closeModal },
+    { label: 'Reset Password', cls: 'btn-primary', fn: async () => {
+        const nw = document.getElementById('rp_new').value;
+        const cf = document.getElementById('rp_conf').value;
+        if (nw.length < 6) { toast('Too short', 'Password must be at least 6 characters.', 'error'); return; }
+        if (nw !== cf)     { toast('Passwords don\'t match', 'Please re-enter the new password.', 'error'); return; }
+        try {
+          await POST(`/users/${id}/reset-password`, { newPassword: nw });
+          closeModal();
+          toast('Password reset', `${name} can now sign in with the new password.`, 'success');
+        } catch (e) { toast('Reset failed', e.message, 'error'); }
     }},
   ]);
 }
@@ -4624,6 +4745,74 @@ async function changePassword() {
     toast('Password updated', 'Your password has been changed successfully.', 'success');
   } catch (e) { toast('Failed', e.message, 'error'); }
 }
+
+// ═══════════════════════════════════════════════════════
+//  SHOW / HIDE PASSWORD
+// ═══════════════════════════════════════════════════════
+// Every password field gets an eye toggle, rather than each form remembering to
+// add one. Panels and modals are rebuilt with innerHTML, so a single pass at
+// startup would only ever cover the login box — hence the observer below.
+
+function enhancePasswordFields(root = document) {
+  const found = root.querySelectorAll ? [...root.querySelectorAll('input[type="password"]')] : [];
+  // An inserted node can BE the input rather than contain one — querySelectorAll
+  // does not match its own root, so check it separately.
+  if (root.matches && root.matches('input[type="password"]')) found.push(root);
+
+  found.forEach(input => {
+    if (input.dataset.pwEnhanced) return;
+    input.dataset.pwEnhanced = '1';
+
+    // Reuse .input-icon-wrap as the positioning context where a form already
+    // has one (it is already position:relative), so the lock icon on the left
+    // and the eye on the right sit in the same box.
+    const parent = input.parentElement;
+    let host;
+    if (parent && parent.classList.contains('input-icon-wrap')) {
+      host = parent;
+      input.style.paddingRight = '38px';
+    } else {
+      host = document.createElement('span');
+      host.className = 'pw-wrap';
+      input.replaceWith(host);
+      host.appendChild(input);
+    }
+
+    const btn = document.createElement('button');
+    btn.type      = 'button';
+    btn.className = 'pw-reveal';
+    btn.innerHTML = IC.eye;
+    btn.title           = 'Show password';
+    btn.setAttribute('aria-label', 'Show password');
+    // Skipped in tabbing: reaching the eye between the password box and the
+    // sign-in button would put a control nobody wants in the Enter path.
+    btn.tabIndex = -1;
+
+    btn.addEventListener('click', () => {
+      const show = input.type === 'password';
+      input.type      = show ? 'text' : 'password';
+      btn.innerHTML   = show ? IC.eyeOff : IC.eye;
+      btn.title       = show ? 'Hide password' : 'Show password';
+      btn.setAttribute('aria-label', btn.title);
+      // Focus back to the field so typing continues where it left off.
+      input.focus();
+    });
+
+    host.appendChild(btn);
+  });
+}
+
+// Panels swap their contents constantly, so watch for new fields instead of
+// asking every render path to call the function.
+new MutationObserver(muts => {
+  for (const m of muts) {
+    for (const node of m.addedNodes) {
+      if (node.nodeType === 1) enhancePasswordFields(node);
+    }
+  }
+}).observe(document.body, { childList: true, subtree: true });
+
+enhancePasswordFields();
 
 // ═══════════════════════════════════════════════════════
 //  MODAL SYSTEM
