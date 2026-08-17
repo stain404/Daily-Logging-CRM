@@ -16,7 +16,8 @@
   `qa.employee.a` `qa.employee.b` `qa.orphan` — password **`QAtest123`** for all
 - Login accepts username **or** empId (QA001–QA008)
 
-**Suggested order:** §0 setup → §9 known suspects → then §1 through §8 → §10 UI → §11 sign-off
+**Suggested order:** §0 setup → §9 known suspects → then §1 through §8 → §10 UI → §12 approvals →
+§11 sign-off
 
 ---
 
@@ -57,15 +58,21 @@
 
 ## 2 · Permissions
 
-**Intended matrix** — the spec you're testing against:
+**Intended matrix** — the spec you're testing against.
+
+> **Changed 17 Aug 2026.** Adding and removing people, teams and departments is
+> now **proposed by HR and approved by the CEO** — nothing is created or deleted
+> until the CEO approves it. The CEO (superadmin) can no longer add or remove
+> directly, and admin can do neither. Ordinary edits are unaffected. See §12.
 
 | Action                    | superadmin | admin |  hr           |  manager  | employee |
 |---------------------------|:----------:|:-----:|:-------------:|:---------:|:--------:|
 | See all tasks             | all        | all   | own           | own team  |   own    |
-| Create / edit user        | ✅         | ✅   | emp+mgr only  | ❌        | ❌      |
-| Delete user               | ✅         | ❌   | ❌            | ❌        | ❌      |
-| Create / edit dept & team | ✅         | ✅   | ✅            | ❌        | ❌      |
-| Delete dept & team        | ✅         | ❌   | ❌            | ❌        | ❌      |
+| **Propose** add / remove  | ❌         | ❌   | ✅            | ❌        | ❌      |
+| **Approve** add / remove  | ✅         | ❌   | ❌            | ❌        | ❌      |
+| Edit user                 | ✅         | ✅   | emp+mgr only  | ❌        | ❌      |
+| Grant admin/superadmin    | ✅         | ❌   | ❌            | ❌        | ❌      |
+| Edit dept & team          | ✅         | ✅   | ✅            | ❌        | ❌      |
 | Edit team membership      | ✅         | ✅   | ✅            | own team  | ❌      |
 | Assign task               | ✅         | ✅   | ❌            | own team  | ❌      |
 | Review / rate             | ✅         | ✅   | ❌            | own team  | ❌      |
@@ -80,15 +87,16 @@ Test through the **API with a real token**, not by looking at the UI. Every deni
 > **Run these with one command:** `node scripts/permissionProbe.js` (app must be running).
 > It logs in as all 7 QA roles, asserts a status per endpoint, reverts every mutation it makes,
 > and prints the failures with their IDs. Re-run it after any permission change — that's `11.2`.
-> Marks below came from that run; **8 of 28 failed** → **F5**.
+> Last run **17 Aug 2026** after the approval change: **22 of 28 passed**. The two admin-escalation
+> failures are fixed; the six manager-scoping ones are unchanged → **F5**.
 
 - [x] `2.1` HR creates a user with `role: "admin"` → 403
 - [x] `2.2` HR edits an existing admin / superadmin / HR account → 403
 - [x] `2.3` HR promotes an employee to `admin` → 403
-- [o] `2.4` Admin sets their **own** role to `superadmin` → 403
-  - Returned **200** and the role actually changed , same as `9.3a`
-- [o] `2.5` Admin edits or deactivates the superadmin → 403
-  - Returned **200**, superadmin was deactivated 
+- [x] `2.4` Admin sets their **own** role to `superadmin` → 403
+  - **Fixed** — `users.js` now lets only a superadmin grant or change a privileged role
+- [x] `2.5` Admin edits or deactivates the superadmin → 403
+  - **Fixed** — same guard, plus the CEO account cannot be deactivated at all
 - [ ] `2.6` Superadmin deletes own account → blocked
 - [x] `2.7` Employee lists users → 403
 - [x] `2.8` Employee assigns a task → 403
@@ -306,15 +314,16 @@ Scoping is enforced on some endpoints and missing on others. **All six confirmed
 > Your own spec says a manager's world is their own team. Right now that only holds for the
 > list view and the reports.
 
-### 9.3 · An admin can promote themselves to superadmin
+### 9.3 · An admin can promote themselves to superadmin — **FIXED**
 
-`PUT /api/users/:id` guards **HR** against role changes; `admin` passes straight through.
-**Both confirmed** → **F5**.
+`PUT /api/users/:id` guarded **HR** against role changes; `admin` passed straight through.
 
-- [o] `9.3a` As admin, set own role to `superadmin`
-  - 200, and the role **actually changed**. Full system control by editing your own record
-- [o] `9.3b` As admin, demote or deactivate the superadmin
-  - 200, the owner's account was deactivated and locked out until restored
+- [x] `9.3a` As admin, set own role to `superadmin` → **403**
+- [x] `9.3b` As admin, demote or deactivate the superadmin → **403**
+
+> Fixed alongside the approval flow (§12), not as a separate job: an admin who can promote
+> themselves to superadmin can approve their own change requests, which would have made the whole
+> approval gate decorative. Re-confirmed by `permissionProbe.js` on 17 Aug 2026.
 
 ### 9.4 · Nothing at the database level enforces one entry per day
 
@@ -391,6 +400,63 @@ Scoping is enforced on some endpoints and missing on others. **All six confirmed
 - [ ] `11.3` One real month of production numbers spot-checked against a manual count
 - [ ] `11.4` No test data leaked into the real database
 - [ ] `11.5` `ORG_TZ` set correctly in the production environment
+
+---
+
+## 12 · CEO approval of org changes
+
+Added 17 Aug 2026. HR proposes every addition and removal; nothing exists, and nothing is
+deleted, until the CEO approves it. Ordinary edits are untouched and still instant.
+
+> **Run these with one command:** `node scripts/approvalProbe.js` (app must be running).
+> It covers every row marked `[x]` below — **33/33 passed** on 17 Aug 2026 — and cleans up
+> after itself. Re-run it with `permissionProbe.js` after any permission change (`11.2`).
+
+**Who may propose, who may decide**
+
+- [x] `12.1` CEO cannot add a person, team or department directly → 403 explaining the workflow
+- [x] `12.2` Admin cannot add or remove anything → 403
+- [x] `12.3` Manager and employee cannot → 403
+- [x] `12.4` HR's add returns **202**, not 201 — the response says pending
+- [x] `12.5` HR cannot approve their own request → 403
+- [x] `12.6` Admin cannot approve → 403
+- [x] `12.7` A manager reading the queue sees nothing; HR sees only their own; CEO sees all
+
+**Nothing happens until approval** — the point of the whole feature
+
+- [x] `12.8` A proposed employee **cannot log in** before approval
+- [x] `12.9` A proposed department is absent from `GET /departments` until approved
+- [x] `12.10` A pending removal leaves the account working
+- [x] `12.11` After approval the new employee logs in with the password HR set
+  - Confirms the stored hash was not double-hashed — the request holds a hash, never plaintext
+- [x] `12.12` A rejected removal leaves the account untouched
+- [x] `12.13` The same request cannot be approved twice → 400
+
+**Edits stay instant**
+
+- [x] `12.14` HR editing a designation still applies immediately (200)
+- [x] `12.15` Setting a user inactive returns 202 and waits; they stay active until approved
+- [x] `12.16` Approving the deactivation locks them out
+- [ ] `12.17` An edit that changes **both** a normal field and `active` → the normal field saves
+      and only the status waits. Response is 202 and says so
+- [ ] `12.18` Team membership changes are still instant for HR and the team's own manager
+
+**Still to test**
+
+- [ ] `12.19` Approving a request whose target was deleted meanwhile → `failed` with a readable
+      reason, HR notified, and **no** half-applied change
+- [ ] `12.20` Approving an add whose empId was taken meanwhile → same
+- [ ] `12.21` HR withdraws their own pending request; HR cannot withdraw someone else's
+- [ ] `12.22` The CEO's sidebar badge count matches the number of pending requests, and clears
+      as he works through them
+- [ ] `12.23` The CEO gets a notification when HR raises a request; HR gets one on the decision
+- [ ] `12.24` Audit entries: `Change Requested`, `Change Approved` + `Change Applied`,
+      `Change Rejected`, `Change Withdrawn` — and the applied entry reads like the old direct one
+- [ ] `12.25` Deleting a department still holding staff → the summary tells the CEO how many
+- [ ] `12.26` UI: HR sees Add buttons, the CEO does not; the CEO sees Approve/Reject, HR sees
+      Withdraw
+- [ ] `12.27` Onboarding delay is acceptable in practice — a Friday-evening hire waits for the
+      CEO. Confirm with HR that this is what you want before it bites
 
 ---
 
@@ -548,7 +614,12 @@ Re-run the scan any time before deploying the validator:
 `db.users.find({ email: { $exists: true, $not: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/ } }, { empId: 1, email: 1 })`
 
 ### F5 · Role boundaries not enforced: 8 of 28 permission probes failed
-`2.4`, `2.5`, `2.11`, `2.12`, `9.2a–f`, `9.3a–b` — **open**
+`2.4`, `2.5`, `2.11`, `2.12`, `9.2a–f`, `9.3a–b` — **half fixed**
+
+> **Update, 17 Aug 2026.** Hole 1 below (an admin is effectively a superadmin) is **fixed** —
+> only a superadmin can now grant or change a privileged role, and the CEO account cannot be
+> deactivated. Hole 2 (manager scoping, `9.2a–f`) is **unchanged and still open**. Latest probe
+> run: 22/28.
 
 Run with `node scripts/permissionProbe.js` (from `server/`, app running). It logs in as all 7 QA
 roles, asserts an expected status per endpoint, reverts every mutation, and cleans up its fixtures.

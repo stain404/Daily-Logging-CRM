@@ -64,7 +64,11 @@ UserSchema.pre('save', async function (next) {
       .toUpperCase();
   }
 
-  if (!this.isModified('password')) return next();
+  // A pending change request stores an already-hashed password — it can sit
+  // for days awaiting the CEO and must never hold plaintext. The applier in
+  // services/changeRequests.js sets this flag so the hash isn't hashed twice,
+  // which would leave an account nobody can log into.
+  if (!this.isModified('password') || this.$locals.passwordPreHashed) return next();
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();

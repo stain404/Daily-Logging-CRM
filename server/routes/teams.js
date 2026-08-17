@@ -3,7 +3,11 @@ const router  = express.Router();
 const Team    = require('../models/Team');
 const User    = require('../models/User');
 const Audit   = require('../models/Audit');
+const Department = require('../models/Department');
 const { protect, authorize } = require('../middleware/auth');
+const {
+  canPropose, denyAddRemove, submitRequest, pendingResponse, pendingTargetRequest,
+} = require('../services/changeRequests');
 
 // ── GET /api/teams ────────────────────────────────────────────────────
 router.get('/', protect, async (req, res) => {
@@ -20,24 +24,27 @@ router.get('/', protect, async (req, res) => {
 });
 
 // ── POST /api/teams ───────────────────────────────────────────────────
+// Raised by HR, created only once the CEO approves.
 router.post('/', protect, authorize('hr', 'admin', 'superadmin'), async (req, res) => {
   try {
-    const team = await Team.create(req.body);
+    if (!canPropose(req.user.role)) return denyAddRemove(req, res, 'teams');
 
-    const populated = await Team.findById(team._id)
-      .populate('department', 'name color')
-      .populate('manager',   'name empId')
-      .populate('members',   'name empId');
+    if (!req.body.name) {
+      return res.status(400).json({ success: false, message: 'A team name is required.' });
+    }
+    if (!req.body.department) {
+      return res.status(400).json({ success: false, message: 'A department is required to create a team.' });
+    }
+    if (!await Department.exists({ _id: req.body.department })) {
+      return res.status(400).json({ success: false, message: 'That department does not exist.' });
+    }
 
-    await Audit.create({
-      user:     req.user._id,
-      userName: req.user.name,
-      action:   'Team Created',
-      detail:   `Created team: ${team.name}`,
-      ip:       req.ip,
+    const request = await submitRequest(req, {
+      entity: 'team', action: 'create', payload: req.body,
+      summary: `Add team "${req.body.name}"`,
     });
 
-    res.status(201).json({ success: true, team: populated });
+    return pendingResponse(res, request, `The team will be created`);
   } catch (err) {
     if (err.name === 'CastError' || err.name === 'ValidationError') {
       return res.status(400).json({ success: false, message: 'A department is required to create a team.' });
@@ -109,22 +116,25 @@ router.put('/:id/members', protect, authorize('hr', 'manager', 'admin', 'superad
 });
 
 // ── DELETE /api/teams/:id ─────────────────────────────────────────────
-router.delete('/:id', protect, authorize('superadmin'), async (req, res) => {
+router.delete('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (req, res) => {
   try {
-    const team = await Team.findByIdAndDelete(req.params.id);
+    if (!canPropose(req.user.role)) return denyAddRemove(req, res, 'teams');
+
+    const team = await Team.findById(req.params.id);
     if (!team) {
       return res.status(404).json({ success: false, message: 'Team not found.' });
     }
+    if (await pendingTargetRequest('team', team._id)) {
+      return res.status(400).json({ success: false, message: 'This team already has a change waiting for the CEO.' });
+    }
 
-    await Audit.create({
-      user:     req.user._id,
-      userName: req.user.name,
-      action:   'Team Deleted',
-      detail:   `Deleted team: ${team.name}`,
-      ip:       req.ip,
+    const request = await submitRequest(req, {
+      entity: 'team', action: 'delete', target: team._id,
+      targetLabel: team.name,
+      summary: `Delete team "${team.name}"${team.members?.length ? ` (${team.members.length} members)` : ''}`,
     });
 
-    res.json({ success: true, message: 'Team deleted successfully.' });
+    return pendingResponse(res, request, 'The team will be deleted');
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

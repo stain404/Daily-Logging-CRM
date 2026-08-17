@@ -1649,6 +1649,7 @@
         <div id="page-employees"     class="page"></div>
         <div id="page-teams"         class="page"></div>
         <div id="page-departments"   class="page"></div>
+        <div id="page-approvals"     class="page"></div>
         <div id="page-reports"       class="page"></div>
         <div id="page-audit"         class="page"></div>
         <div id="page-notifications" class="page"></div>
@@ -1798,6 +1799,20 @@ const GET    = (path)       => apiFetch('GET',    path);
 const POST   = (path, body) => apiFetch('POST',   path, body);
 const PUT    = (path, body) => apiFetch('PUT',    path, body);
 const DELETE = (path)       => apiFetch('DELETE', path);
+
+// Adding or removing people, teams and departments is raised by HR and
+// approved by the CEO, so those calls come back 202 with `pending: true` and
+// nothing has changed yet. Reporting that as a plain success would send HR off
+// to a list their new employee is not in, looking for a bug that isn't there.
+function reportChange(result, successTitle, successMsg) {
+  if (result && result.pending) {
+    toast('Sent to the CEO', result.message || 'This needs the CEO\'s approval before it takes effect.', 'info', 7000);
+    refreshApprovalBadge();
+    return true;
+  }
+  toast(successTitle, successMsg, 'success');
+  return false;
+}
 
 // ═══════════════════════════════════════════════════════
 //  UTILITY HELPERS
@@ -2159,6 +2174,7 @@ function initApp() {
   document.getElementById('tbDate').textContent  = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   buildNav();
+  refreshApprovalBadge();
   sp('dashboard');
   startNotifPolling();
   openDeepLink();
@@ -2205,6 +2221,7 @@ function getNavItems() {
     { icon: 'employees',    label: 'Employees',     page: 'employees' },
     { icon: 'teams',        label: 'Teams',         page: 'teams' },
     { icon: 'departments',  label: 'Departments',   page: 'departments' },
+    { icon: 'check',        label: 'My Requests',   page: 'approvals' },
     { icon: 'reports',      label: 'Reports',       page: 'reports' },
     { icon: 'settings',     label: 'Settings',      page: 'settings' },
   ];
@@ -2229,6 +2246,9 @@ function getNavItems() {
   return [
     ...base,
     { icon: 'tasks',       label: 'All Tasks',    page: 'tasks' },
+    // The CEO's queue. Sits directly under the org-chart pages it governs,
+    // and above Reports, because an unapproved change makes the reports wrong.
+    { icon: 'check',       label: 'Approvals',    page: 'approvals' },
     { icon: 'employees',   label: 'Employees',    page: 'employees' },
     { icon: 'teams',       label: 'Teams',        page: 'teams' },
     { icon: 'departments', label: 'Departments',  page: 'departments' },
@@ -2254,6 +2274,24 @@ function buildNav() {
     ).join('');
 }
 
+// The CEO has no reason to open a page he doesn't know is holding anything,
+// and a new hire can't log in until he does — so the count goes to him rather
+// than waiting to be found. Uses .sb-item-badge, the same treatment as any
+// other sidebar count.
+async function refreshApprovalBadge() {
+  const nav = document.getElementById('nav-approvals');
+  if (!nav) return;
+  try {
+    const { count } = await GET('/change-requests/pending-count');
+    nav.querySelector('.sb-item-badge')?.remove();
+    if (!count) return;
+    const b = document.createElement('span');
+    b.className   = 'sb-item-badge';
+    b.textContent = count > 99 ? '99+' : count;
+    nav.appendChild(b);
+  } catch (e) { /* the page itself still shows the queue */ }
+}
+
 function sp(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sb-item').forEach(n => n.classList.remove('active'));
@@ -2267,6 +2305,7 @@ function sp(page) {
     departments: 'Departments', reports: 'Reports & Analytics',
     audit: 'Audit Log', notifications: 'Notifications', settings: 'Settings',
     files: 'Files',
+    approvals: CU?.role === 'hr' ? 'My Requests' : 'Approvals',
   };
   document.getElementById('pgTitle').textContent = titles[page] || page;
   closeSidebar();
@@ -2278,7 +2317,7 @@ async function render(page) {
     dashboard: rdDash, tasks: rdTasks, submit: rdSubmit, reviews: rdReviews,
     employees: rdEmployees, teams: rdTeams, departments: rdDepts,
     reports: rdReports, audit: rdAudit, notifications: rdNotifs, settings: rdSettings,
-    files: rdFiles,
+    files: rdFiles, approvals: rdApprovals,
   };
   if (fns[page]) await fns[page]();
 }
@@ -3255,7 +3294,7 @@ async function rdEmployees() {
           </div>
           <button class="btn btn-secondary btn-sm" onclick="exportUsersCSV()">${IC.download} Export CSV</button>
           <span id="ecnt" style="font-size:11px;color:var(--text-muted);margin-left:auto"></span>
-          ${['superadmin','hr'].includes(CU.role) ? `<button class="btn btn-primary btn-sm" onclick="addEmpModal()">${IC.plus} Add Employee</button>` : ''}
+          ${CU.role === 'hr' ? `<button class="btn btn-primary btn-sm" onclick="addEmpModal()">${IC.plus} Add Employee</button>` : ''}
         </div>
       </div>
     </div>
@@ -3285,6 +3324,9 @@ async function loadEmpTable() {
       ? users.map(u => {
           const hrCanEdit = isHR && ['employee', 'manager'].includes(u.role);
           const canEdit    = isSA || hrCanEdit;
+          // Removal is HR's to propose — the CEO approves it from Approvals
+          // rather than deleting from this table.
+          const canRemove  = hrCanEdit;
           return `<tr>
           <td><div style="display:flex;align-items:center;gap:10px">
             ${av(u, 'av-sm')}
@@ -3298,7 +3340,7 @@ async function loadEmpTable() {
           ${showActionsCol ? `<td><div class="tbl-actions">
             ${canEdit ? `<button class="btn btn-secondary btn-xs" onclick="editEmpModal('${u._id}')" title="Edit">${IC.edit}</button>` : ''}
             ${canEdit ? `<button class="btn btn-secondary btn-xs" onclick="resetPwModal('${u._id}','${u.name.replace(/'/g, "\\'")}')" title="Reset password">${IC.key}</button>` : ''}
-            ${isSA     ? `<button class="btn btn-danger btn-xs"    onclick="confirmDelEmp('${u._id}','${u.name}')" title="Delete">${IC.trash}</button>` : ''}
+            ${canRemove ? `<button class="btn btn-danger btn-xs"    onclick="confirmDelEmp('${u._id}','${u.name}')" title="Request removal">${IC.trash}</button>` : ''}
           </div></td>` : ''}
         </tr>`;
         }).join('')
@@ -3351,7 +3393,7 @@ async function addEmpModal() {
         if (!name || !empId || !username || !desig) { toast('Required fields missing', 'Please fill all required fields.', 'error'); return; }
         const colors = ['#2563eb','#16a34a','#d97706','#dc2626','#7c3aed','#0ea5e9','#ec4899'];
         try {
-          await POST('/users', {
+          const r = await POST('/users', {
             name, empId, username, email,
             password: document.getElementById('ne_pass').value || 'admin123',
             role: document.getElementById('ne_role').value,
@@ -3360,7 +3402,9 @@ async function addEmpModal() {
             color: colors[Math.floor(Math.random() * colors.length)],
             initials: name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase(),
           });
-          closeModal(); toast('Employee added', `${name} has been added successfully.`, 'success'); loadEmpTable();
+          closeModal();
+          reportChange(r, 'Employee added', `${name} has been added successfully.`);
+          loadEmpTable();
         } catch (e) { toast('Failed to add employee', e.message, 'error'); }
     }},
   ]);
@@ -3406,7 +3450,7 @@ async function editEmpModal(id) {
     { label: 'Cancel', cls: 'btn-secondary', fn: closeModal },
     { label: 'Save Changes', cls: 'btn-primary', fn: async () => {
         try {
-          await PUT('/users/' + id, {
+          const r = await PUT('/users/' + id, {
             name:       document.getElementById('eu_name').value,
             designation:document.getElementById('eu_desig').value,
             email:      document.getElementById('eu_email').value,
@@ -3414,7 +3458,11 @@ async function editEmpModal(id) {
             department: document.getElementById('eu_dept').value,
             active:     document.getElementById('eu_active').value === '1',
           });
-          closeModal(); toast('Employee updated', 'Changes saved successfully.', 'success'); loadEmpTable();
+          closeModal();
+          // Switching the status field is a removal, so that half may come
+          // back pending even though the rest of the edit saved.
+          reportChange(r, 'Employee updated', 'Changes saved successfully.');
+          loadEmpTable();
         } catch (e) { toast('Update failed', e.message, 'error'); }
     }},
   ]);
@@ -3473,12 +3521,156 @@ function resetPwModal(id, name) {
 }
 
 function confirmDelEmp(id, name) {
-  openConfirm('Delete Employee', `Are you sure you want to remove <strong>${name}</strong>? This action cannot be undone.`, async () => {
-    try {
-      await DELETE('/users/' + id);
-      closeConfirm(); toast('Employee removed', `${name} has been deleted.`, 'success'); loadEmpTable();
-    } catch (e) { toast('Delete failed', e.message, 'error'); }
-  }, 'btn-danger');
+  openConfirm('Delete Employee',
+    `Remove <strong>${name}</strong>? This is sent to the CEO for approval, and their record is deleted only once he approves.`,
+    async () => {
+      try {
+        const r = await DELETE('/users/' + id);
+        closeConfirm();
+        reportChange(r, 'Employee removed', `${name} has been deleted.`);
+        loadEmpTable();
+      } catch (e) { toast('Delete failed', e.message, 'error'); }
+    }, 'btn-danger');
+}
+
+// ═══════════════════════════════════════════════════════
+//  APPROVALS
+//  Adding and removing people, teams and departments is HR's to propose and
+//  the CEO's to approve. Nothing exists in the real collections until it is
+//  approved here — so for the CEO this page is the only place those changes
+//  happen, and for HR it is where they find out what came of theirs.
+// ═══════════════════════════════════════════════════════
+const CR_STATUS = {
+  pending:   { cls: 'badge-amber', label: 'Waiting' },
+  approved:  { cls: 'badge-green', label: 'Approved' },
+  rejected:  { cls: 'badge-red',   label: 'Rejected' },
+  failed:    { cls: 'badge-red',   label: 'Could not apply' },
+  withdrawn: { cls: 'badge-blue',  label: 'Withdrawn' },
+};
+
+// What the CEO needs to see before saying yes. Never the password — the
+// request holds only a hash, and it has no business on screen regardless.
+function crDetails(r) {
+  const rows = [];
+  if (r.entity === 'user' && r.action === 'create') {
+    const p = r.payload || {};
+    rows.push(['Employee ID', p.empId], ['Username', p.username],
+              ['Role', p.role || 'employee'], ['Designation', p.designation]);
+  } else if (r.targetLabel) {
+    rows.push([r.entity === 'user' ? 'Employee' : r.entity === 'team' ? 'Team' : 'Department', r.targetLabel]);
+  }
+  const shown = rows.filter(([, v]) => v);
+  if (!shown.length) return '';
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 0 0;font-size:12px;color:var(--text-secondary)">
+    ${shown.map(([k, v]) => `<div><span style="color:var(--text-muted)">${k}:</span> ${esc(v)}</div>`).join('')}
+  </div>`;
+}
+
+async function rdApprovals() {
+  const el = document.getElementById('page-approvals');
+  const isCEO = CU.role === 'superadmin';
+  pageLoader(el);
+  try {
+    const { requests } = await GET('/change-requests');
+    const pending  = requests.filter(r => r.status === 'pending');
+    const decided  = requests.filter(r => r.status !== 'pending');
+
+    const card = r => {
+      const st = CR_STATUS[r.status] || CR_STATUS.pending;
+      const isPending = r.status === 'pending';
+      return `<div class="card mb">
+        <div class="card-body">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+            <div style="flex:1;min-width:220px">
+              <div style="font-size:14px;font-weight:700;color:var(--text-primary)">${esc(r.summary)}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+                Requested by ${esc(r.requestedByName || r.requestedBy?.name || 'HR')} · ${timeAgo(r.createdAt)}
+              </div>
+              ${crDetails(r)}
+              ${r.decidedAt && !isPending ? `<div style="font-size:11px;color:var(--text-muted);margin-top:8px">
+                ${esc(st.label)} by ${esc(r.decidedByName || r.decidedBy?.name || '—')} · ${timeAgo(r.decidedAt)}
+              </div>` : ''}
+              ${r.decisionNote ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:6px">“${esc(r.decisionNote)}”</div>` : ''}
+              ${r.failureReason ? `<div style="font-size:12px;color:var(--red-ink);margin-top:6px">${esc(r.failureReason)}</div>` : ''}
+            </div>
+            <span class="badge ${st.cls}">${st.label}</span>
+          </div>
+          ${isPending ? `<div style="display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+            ${isCEO ? `
+              <button class="btn btn-primary btn-sm"   onclick="approveChange('${r._id}')">${IC.check} Approve</button>
+              <button class="btn btn-danger btn-sm"    onclick="rejectChangeModal('${r._id}')">Reject</button>
+            ` : `
+              <button class="btn btn-secondary btn-sm" onclick="withdrawChange('${r._id}')">Withdraw</button>
+            `}
+          </div>` : ''}
+        </div>
+      </div>`;
+    };
+
+    el.innerHTML = `
+      <div style="margin-bottom:16px;font-size:13px;color:var(--text-muted)">
+        ${isCEO
+          ? `${pending.length} change${pending.length !== 1 ? 's' : ''} waiting on you`
+          : `${pending.length} of your request${pending.length !== 1 ? 's are' : ' is'} waiting on the CEO`}
+      </div>
+      ${pending.length ? pending.map(card).join('') : `<div class="card mb"><div class="card-body"><div class="empty">
+        <div class="empty-icon">${IC.check}</div>
+        <div class="empty-title">Nothing waiting</div>
+        <div class="empty-sub">${isCEO
+          ? 'New employees, teams and departments appear here for your approval when HR adds them.'
+          : 'Anything you add or remove will appear here until the CEO approves it.'}</div>
+      </div></div></div>`}
+      ${decided.length ? `
+        <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin:22px 0 12px">History</div>
+        ${decided.map(card).join('')}
+      ` : ''}`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">${IC.alert}</div><div class="empty-title">Failed to load approvals</div><button class="btn btn-primary" onclick="rdApprovals()">${IC.refresh} Retry</button></div>`;
+  }
+}
+
+async function approveChange(id) {
+  try {
+    const r = await PUT('/change-requests/' + id + '/approve');
+    toast('Approved', r.message || 'The change has been applied.', 'success');
+    refreshApprovalBadge();
+    rdApprovals();
+  } catch (e) {
+    // A 409 means it was approved but could not be carried out — the target
+    // moved while it sat waiting. The reason matters more than the failure.
+    toast('Could not apply', e.message, 'error', 7000);
+    rdApprovals();
+  }
+}
+
+function rejectChangeModal(id) {
+  openModal('Reject this change', `
+    <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:12px">
+      HR will be told it was rejected. A reason saves them guessing whether to fix it and resubmit.
+    </p>
+    <div class="form-group">
+      <label class="form-label">Reason (optional)</label>
+      <textarea class="form-input" id="cr_note" rows="3" placeholder="e.g. Wait until the new department is set up"></textarea>
+    </div>
+  `, [
+    { label: 'Cancel', cls: 'btn-secondary', fn: closeModal },
+    { label: 'Reject', cls: 'btn-danger', fn: async () => {
+        try {
+          await PUT('/change-requests/' + id + '/reject', { note: document.getElementById('cr_note').value.trim() });
+          closeModal(); toast('Rejected', 'HR has been notified.', 'success');
+          refreshApprovalBadge(); rdApprovals();
+        } catch (e) { toast('Failed', e.message, 'error'); }
+    }},
+  ]);
+}
+
+async function withdrawChange(id) {
+  try {
+    await DELETE('/change-requests/' + id);
+    toast('Withdrawn', 'The request has been taken off the CEO’s list.', 'success');
+    refreshApprovalBadge();
+    rdApprovals();
+  } catch (e) { toast('Failed', e.message, 'error'); }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3494,7 +3686,7 @@ async function rdTeams() {
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <div style="font-size:13px;color:var(--text-muted)">${teams.length} team${teams.length !== 1 ? 's' : ''}</div>
-        ${isSA ? `<button class="btn btn-primary btn-sm" onclick="addTeamModal()">${IC.plus} Add Team</button>` : ''}
+        ${CU.role === 'hr' ? `<button class="btn btn-primary btn-sm" onclick="addTeamModal()">${IC.plus} Add Team</button>` : ''}
       </div>
       <div class="g-auto">
         ${teams.length
@@ -3564,12 +3756,14 @@ async function addTeamModal() {
         if (!name) { toast('Name required', 'Please enter a team name.', 'error'); return; }
         if (!document.getElementById('nt_dept').value) { toast('Department required', 'Add a department first, then select one here.', 'error'); return; }
         try {
-          await POST('/teams', {
+          const r = await POST('/teams', {
             name,
             department: document.getElementById('nt_dept').value,
             manager: document.getElementById('nt_mgr').value || undefined,
           });
-          closeModal(); toast('Team created', `${name} has been created.`, 'success'); rdTeams();
+          closeModal();
+          reportChange(r, 'Team created', `${name} has been created.`);
+          rdTeams();
         } catch (e) { toast('Failed', e.message, 'error'); }
     }},
   ]);
@@ -3683,7 +3877,7 @@ async function rdDepts() {
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <div style="font-size:13px;color:var(--text-muted)">${departments.length} department${departments.length !== 1 ? 's' : ''}</div>
-        ${isSA ? `<button class="btn btn-primary btn-sm" onclick="addDeptModal()">${IC.plus} Add Department</button>` : ''}
+        ${CU.role === 'hr' ? `<button class="btn btn-primary btn-sm" onclick="addDeptModal()">${IC.plus} Add Department</button>` : ''}
       </div>
       <div class="g-auto">
         ${departments.map(d => `<div class="card dept-card">
@@ -3717,8 +3911,10 @@ async function addDeptModal() {
         const name = document.getElementById('nd_name').value.trim();
         if (!name) { toast('Name required', '', 'error'); return; }
         try {
-          await POST('/departments', { name, color: document.getElementById('nd_color').value });
-          closeModal(); toast('Department created', `${name} has been created.`, 'success'); rdDepts();
+          const r = await POST('/departments', { name, color: document.getElementById('nd_color').value });
+          closeModal();
+          reportChange(r, 'Department created', `${name} has been created.`);
+          rdDepts();
         } catch (e) { toast('Failed', e.message, 'error'); }
     }},
   ]);

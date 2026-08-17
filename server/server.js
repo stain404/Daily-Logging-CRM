@@ -19,6 +19,7 @@ const auditRoutes  = require('./routes/audit');
 const notifRoutes  = require('./routes/notifications');
 const emailRoutes  = require('./routes/emails');
 const attachRoutes = require('./routes/attachments');
+const changeRoutes = require('./routes/changeRequests');
 
 const app = express();
 
@@ -60,6 +61,7 @@ app.use('/api/audit',       auditRoutes);
 app.use('/api/notifications', notifRoutes);
 app.use('/api/emails',      emailRoutes);
 app.use('/api/attachments', attachRoutes);
+app.use('/api/change-requests', changeRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) =>

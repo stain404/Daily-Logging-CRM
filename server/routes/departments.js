@@ -1,8 +1,13 @@
 const express = require('express');
 const router  = express.Router();
 const Department = require('../models/Department');
+const User       = require('../models/User');
+const Team       = require('../models/Team');
 const Audit      = require('../models/Audit');
 const { protect, authorize } = require('../middleware/auth');
+const {
+  canPropose, denyAddRemove, submitRequest, pendingResponse, pendingTargetRequest,
+} = require('../services/changeRequests');
 
 // ── GET /api/departments ──────────────────────────────────────────────
 router.get('/', protect, async (req, res) => {
@@ -17,21 +22,23 @@ router.get('/', protect, async (req, res) => {
 // ── POST /api/departments ─────────────────────────────────────────────
 router.post('/', protect, authorize('hr', 'admin', 'superadmin'), async (req, res) => {
   try {
-    const dept = await Department.create(req.body);
+    if (!canPropose(req.user.role)) return denyAddRemove(req, res, 'departments');
 
-    await Audit.create({
-      user:     req.user._id,
-      userName: req.user.name,
-      action:   'Department Created',
-      detail:   `Created department: ${dept.name}`,
-      ip:       req.ip,
-    });
-
-    res.status(201).json({ success: true, department: dept });
-  } catch (err) {
-    if (err.code === 11000) {
+    if (!req.body.name) {
+      return res.status(400).json({ success: false, message: 'A department name is required.' });
+    }
+    // Checked now as well as at approval, so HR sees the clash on the form.
+    if (await Department.findOne({ name: req.body.name })) {
       return res.status(400).json({ success: false, message: 'A department with that name already exists.' });
     }
+
+    const request = await submitRequest(req, {
+      entity: 'department', action: 'create', payload: req.body,
+      summary: `Add department "${req.body.name}"`,
+    });
+
+    return pendingResponse(res, request, 'The department will be created');
+  } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -62,22 +69,33 @@ router.put('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (req, 
 });
 
 // ── DELETE /api/departments/:id ───────────────────────────────────────
-router.delete('/:id', protect, authorize('superadmin'), async (req, res) => {
+router.delete('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (req, res) => {
   try {
-    const dept = await Department.findByIdAndDelete(req.params.id);
+    if (!canPropose(req.user.role)) return denyAddRemove(req, res, 'departments');
+
+    const dept = await Department.findById(req.params.id);
     if (!dept) {
       return res.status(404).json({ success: false, message: 'Department not found.' });
     }
+    if (await pendingTargetRequest('department', dept._id)) {
+      return res.status(400).json({ success: false, message: 'This department already has a change waiting for the CEO.' });
+    }
 
-    await Audit.create({
-      user:     req.user._id,
-      userName: req.user.name,
-      action:   'Department Deleted',
-      detail:   `Deleted department: ${dept.name}`,
-      ip:       req.ip,
+    // Counted for the summary, not to block: the CEO deciding whether to
+    // delete a department needs to know 14 people are sitting in it.
+    const [staff, teams] = await Promise.all([
+      User.countDocuments({ department: dept._id }),
+      Team.countDocuments({ department: dept._id }),
+    ]);
+    const scope = [staff && `${staff} staff`, teams && `${teams} teams`].filter(Boolean).join(', ');
+
+    const request = await submitRequest(req, {
+      entity: 'department', action: 'delete', target: dept._id,
+      targetLabel: dept.name,
+      summary: `Delete department "${dept.name}"${scope ? ` (${scope})` : ''}`,
     });
 
-    res.json({ success: true, message: 'Department deleted successfully.' });
+    return pendingResponse(res, request, 'The department will be deleted');
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

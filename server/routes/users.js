@@ -5,6 +5,10 @@ const Task    = require('../models/Task');
 const Audit   = require('../models/Audit');
 const { protect, authorize } = require('../middleware/auth');
 const { REVIEW_ROLES } = require('../services/mailer');
+const {
+  canPropose, denyAddRemove, submitRequest, pendingResponse, hashPassword,
+  describeUserCreate, describeUserRemoval, pendingUserCreateClash, pendingTargetRequest,
+} = require('../services/changeRequests');
 
 // ── GET /api/users ────────────────────────────────────────────────────
 router.get('/', protect, authorize('hr', 'manager', 'admin', 'superadmin'), async (req, res) => {
@@ -147,36 +151,61 @@ router.get('/:id/stats', protect, authorize('hr', 'manager', 'admin', 'superadmi
 });
 
 // ── POST /api/users ────────────────────────────────────────────────────
+// Adding a person no longer creates anything. HR raises the request, the CEO
+// approves it, and only then does the account exist — so the new hire cannot
+// log in until that happens. See services/changeRequests.js.
 router.post('/', protect, authorize('hr', 'admin', 'superadmin'), async (req, res) => {
   try {
+    if (!canPropose(req.user.role)) return denyAddRemove(req, res, 'people');
+
     // HR can only create employee/manager accounts — not admin, superadmin, or hr.
-    if (req.user.role === 'hr' && !['employee', 'manager'].includes(req.body.role || 'employee')) {
+    if (!['employee', 'manager'].includes(req.body.role || 'employee')) {
       return res.status(403).json({ success: false, message: 'HR can only create employee or manager accounts.' });
     }
 
-    const user = await User.create(req.body);
-
-    const populated = await User.findById(user._id)
-      .populate('department', 'name color')
-      .populate('team',       'name');
-
-    await Audit.create({
-      user:     req.user._id,
-      userName: req.user.name,
-      action:   'User Created',
-      detail:   `Created user: ${user.name} (${user.empId})`,
-      ip:       req.ip,
-    });
-
-    res.status(201).json({ success: true, user: populated });
-  } catch (err) {
-    if (err.code === 11000) {
-      const field = Object.keys(err.keyValue)[0];
+    const { empId, username, name, designation, password } = req.body;
+    if (!empId || !username || !name || !designation) {
       return res.status(400).json({
         success: false,
-        message: `A user with that ${field} already exists.`,
+        message: 'Employee ID, username, name and designation are all required.',
       });
     }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+    }
+
+    // The schema's setters normalise these on save; match them here so the
+    // duplicate check compares like with like.
+    const normEmpId = empId.toUpperCase().trim();
+    const normUser  = username.toLowerCase().trim();
+
+    // Validated now as well as at approval time. HR should learn about a clash
+    // while they are still on the form, not days later through the CEO.
+    const clash = await User.findOne({ $or: [{ empId: normEmpId }, { username: normUser }] });
+    if (clash) {
+      return res.status(400).json({
+        success: false,
+        message: `A user with that ${clash.empId === normEmpId ? 'employee ID' : 'username'} already exists.`,
+      });
+    }
+    const queued = await pendingUserCreateClash(normEmpId, normUser);
+    if (queued) {
+      return res.status(400).json({
+        success: false,
+        message: 'That employee ID or username is already waiting for the CEO to approve.',
+      });
+    }
+
+    const request = await submitRequest(req, {
+      entity: 'user',
+      action: 'create',
+      // Hashed here so a request sitting in the queue never holds plaintext.
+      payload: { ...req.body, empId: normEmpId, username: normUser, password: await hashPassword(password) },
+      summary: describeUserCreate(req.body),
+    });
+
+    return pendingResponse(res, request, `${name}'s account will be created`);
+  } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -187,17 +216,59 @@ router.put('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (req, 
     // Never update the password through this route
     const { password, ...updateData } = req.body;
 
+    const target = await User.findById(req.params.id);
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
     if (req.user.role === 'hr') {
-      const target = await User.findById(req.params.id);
-      if (!target) {
-        return res.status(404).json({ success: false, message: 'User not found.' });
-      }
       // HR can only manage employee/manager accounts, and can't grant any other role.
       if (!['employee', 'manager'].includes(target.role)) {
         return res.status(403).json({ success: false, message: 'HR cannot modify admin, superadmin, or HR accounts.' });
       }
       if (updateData.role && !['employee', 'manager'].includes(updateData.role)) {
         return res.status(403).json({ success: false, message: 'HR can only assign the employee or manager role.' });
+      }
+    }
+
+    // Only the CEO may grant or alter a privileged role. Without this an admin
+    // can promote themselves to superadmin and then approve their own change
+    // requests, which would make this whole flow decorative — and it is the
+    // escalation TESTING-CHECKLIST F5 (9.3a/b) already reports.
+    if (updateData.role) {
+      const privileged = ['admin', 'superadmin'];
+      if ((privileged.includes(updateData.role) || privileged.includes(target.role))
+          && req.user.role !== 'superadmin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the CEO can grant or change an admin or superadmin role.',
+        });
+      }
+    }
+
+    // Switching an account off (or back on) is a removal, not an edit, so it
+    // waits for the CEO. Every other field — name, email, designation,
+    // department, team — still applies immediately.
+    let pendingRequest = null;
+    if (updateData.active !== undefined) {
+      const wanted = Boolean(updateData.active);
+      delete updateData.active;
+
+      if (wanted !== target.active) {
+        if (!canPropose(req.user.role)) return denyAddRemove(req, res, 'people');
+        if (target.role === 'superadmin') {
+          return res.status(403).json({ success: false, message: 'The CEO account cannot be deactivated.' });
+        }
+        if (await pendingTargetRequest('user', target._id)) {
+          return res.status(400).json({ success: false, message: 'This account already has a change waiting for the CEO.' });
+        }
+
+        const action = wanted ? 'reactivate' : 'deactivate';
+        pendingRequest = await submitRequest(req, {
+          entity: 'user', action, target: target._id,
+          targetLabel: `${target.name} (${target.empId})`,
+          summary: describeUserRemoval(target, action),
+        });
       }
     }
 
@@ -219,6 +290,15 @@ router.put('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (req, 
       detail:   `Updated user: ${user.name}`,
       ip:       req.ip,
     });
+
+    // Some of this edit landed and some of it is waiting, so say so rather
+    // than reporting a plain success the CEO hasn't granted yet.
+    if (pendingRequest) {
+      return res.status(202).json({
+        success: true, pending: true, user, request: pendingRequest,
+        message: `Other changes saved. ${target.name} will be ${pendingRequest.action}d once the CEO approves.`,
+      });
+    }
 
     res.json({ success: true, user });
   } catch (err) {
@@ -278,26 +358,35 @@ router.post('/:id/reset-password', protect, authorize('hr', 'admin', 'superadmin
 });
 
 // ── DELETE /api/users/:id ─────────────────────────────────────────────
-router.delete('/:id', protect, authorize('superadmin'), async (req, res) => {
+// Deleting is now a request too, and it is the one that matters most: this
+// removes the record outright and orphans that person's task history, so it
+// should never be one click by one person.
+router.delete('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (req, res) => {
   try {
+    if (!canPropose(req.user.role)) return denyAddRemove(req, res, 'people');
+
     if (req.params.id === req.user._id.toString()) {
       return res.status(400).json({ success: false, message: 'You cannot delete your own account.' });
     }
 
-    const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) {
+    const target = await User.findById(req.params.id);
+    if (!target) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
+    if (!['employee', 'manager'].includes(target.role)) {
+      return res.status(403).json({ success: false, message: 'HR can only remove employee or manager accounts.' });
+    }
+    if (await pendingTargetRequest('user', target._id)) {
+      return res.status(400).json({ success: false, message: 'This account already has a change waiting for the CEO.' });
+    }
 
-    await Audit.create({
-      user:     req.user._id,
-      userName: req.user.name,
-      action:   'User Deleted',
-      detail:   `Deleted user: ${user.name} (${user.empId})`,
-      ip:       req.ip,
+    const request = await submitRequest(req, {
+      entity: 'user', action: 'delete', target: target._id,
+      targetLabel: `${target.name} (${target.empId})`,
+      summary: describeUserRemoval(target, 'delete'),
     });
 
-    res.json({ success: true, message: 'User deleted successfully.' });
+    return pendingResponse(res, request, `${target.name}'s record will be deleted`);
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
