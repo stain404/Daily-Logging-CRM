@@ -7,6 +7,17 @@ services:
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
+    # rootDir alone means Render only auto-deploys when a push touches
+    # server/ — but the frontend it serves lives in client/ (see the
+    # express.static call in server.js), outside that directory. Without this
+    # filter a client-only change silently never deploys: commit 0126da0
+    # (a sidebar change, client/index.html only) sat on main while the commit
+    # before it, which happened to touch server files, went live.
+    buildFilter:
+      paths:
+        - server/**
+        - client/**
+        - render.yaml
     envVars:
       - key: NODE_ENV
         value: production
