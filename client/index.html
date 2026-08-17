@@ -258,6 +258,34 @@
     .sb-item:hover  { background: var(--sidebar-hover); color: var(--sidebar-text); }
     .sb-item.active { background: var(--accent-wash); color: var(--accent-bright); border-left-color: var(--accent); }
     .sb-item svg    { width: 16px; height: 16px; flex-shrink: 0; }
+    /* Collapsible nav group — Employees / Teams / Departments are one subject,
+       so they fold into one row instead of eating three of the sidebar's
+       top-level slots. The head is an .sb-item so it inherits every hover,
+       focus and spacing rule rather than redefining them. */
+    .sb-group-head          { width: calc(100% - 16px); }
+    .sb-group-head .sb-chev {
+      margin-left: auto;
+      width: 14px; height: 14px;
+      transition: transform var(--transition);
+    }
+    .sb-group.open .sb-group-head .sb-chev { transform: rotate(90deg); }
+    .sb-group-items         { display: none; }
+    .sb-group.open .sb-group-items { display: block; }
+    /* The rule line is what says "these belong to the row above" once the
+       group is open; the indent alone reads as an accident. */
+    .sb-group-items .sb-item {
+      padding-left: 22px;
+      margin-left: 20px;
+      border-left: 2px solid var(--sidebar-border);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+    .sb-group-items .sb-item.active { border-left-color: var(--accent); }
+    /* A collapsed group still has to show that something inside it is the
+       current page, or the highlight simply vanishes when it folds. */
+    .sb-group:not(.open) .sb-group-head.has-active {
+      background: var(--accent-wash); color: var(--accent-bright);
+      border-left-color: var(--accent);
+    }
     .sb-item-badge  {
       margin-left: auto;
       background: var(--red);
@@ -2258,6 +2286,17 @@ function getNavItems() {
   ];
 }
 
+// Employees, Teams and Departments are one subject — the org chart — so they
+// collapse into a single row rather than taking three of the sidebar's
+// top-level slots. Approvals stays out of it deliberately: its badge is the
+// CEO's prompt to act, and a count hidden inside a folded group prompts nobody.
+const ORG_PAGES  = ['employees', 'teams', 'departments'];
+const ORG_GROUP  = 'org';
+const NAV_CHEVRON = `<svg class="sb-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>`;
+
+const navItemHtml = it =>
+  `<div class="sb-item" id="nav-${it.page}" onclick="sp('${it.page}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sp('${it.page}')}" role="button" tabindex="0">${IC[it.icon]}${it.label}</div>`;
+
 function buildNav() {
   // Files is available to every role, so it is inserted once here rather than
   // repeated into all five role lists in getNavItems(). It sits directly above
@@ -2267,11 +2306,67 @@ function buildNav() {
   items.splice(settingsAt === -1 ? items.length : settingsAt, 0,
     { icon: 'files', label: 'Files', page: 'files' });
 
+  // Only worth grouping when there is more than one item to group. A manager
+  // sees Teams alone ("My Team"), and folding a single row behind a chevron
+  // costs a click and buys nothing.
+  const orgItems = items.filter(i => ORG_PAGES.includes(i.page));
+  const grouped  = orgItems.length > 1;
+  const firstOrg = grouped ? items.findIndex(i => ORG_PAGES.includes(i.page)) : -1;
+
+  const open = localStorage.getItem('tf_nav_' + ORG_GROUP) !== 'closed';
+
+  const groupHtml = `
+    <div class="sb-group${open ? ' open' : ''}" id="navgrp-${ORG_GROUP}">
+      <div class="sb-item sb-group-head" onclick="toggleNavGroup('${ORG_GROUP}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleNavGroup('${ORG_GROUP}')}"
+           role="button" tabindex="0" aria-expanded="${open}" aria-controls="navgrpitems-${ORG_GROUP}">
+        ${IC.employees}Organisation${NAV_CHEVRON}
+      </div>
+      <div class="sb-group-items" id="navgrpitems-${ORG_GROUP}">
+        ${orgItems.map(navItemHtml).join('')}
+      </div>
+    </div>`;
+
+  const html = items
+    .filter(i => !grouped || !ORG_PAGES.includes(i.page))
+    .map(navItemHtml);
+
+  // Put the group back where the first of its members used to sit, so the
+  // running order of the sidebar doesn't shift under people who know it.
+  if (grouped) {
+    const before = items.slice(0, firstOrg).filter(i => !ORG_PAGES.includes(i.page)).length;
+    html.splice(before, 0, groupHtml);
+  }
+
   document.getElementById('sbNav').innerHTML =
-    '<div class="sb-section">Navigation</div>' +
-    items.map(it =>
-      `<div class="sb-item" id="nav-${it.page}" onclick="sp('${it.page}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sp('${it.page}')}" role="button" tabindex="0">${IC[it.icon]}${it.label}</div>`
-    ).join('');
+    '<div class="sb-section">Navigation</div>' + html.join('');
+
+  syncNavGroups();
+}
+
+function toggleNavGroup(name) {
+  const g = document.getElementById('navgrp-' + name);
+  if (!g) return;
+  const open = g.classList.toggle('open');
+  g.querySelector('.sb-group-head')?.setAttribute('aria-expanded', String(open));
+  localStorage.setItem('tf_nav_' + name, open ? 'open' : 'closed');
+}
+
+// Keeps a collapsed group honest: if the current page lives inside it, the head
+// carries the active treatment, and opening the group hands it back to the row.
+function syncNavGroups() {
+  document.querySelectorAll('.sb-group').forEach(g => {
+    const head = g.querySelector('.sb-group-head');
+    if (head) head.classList.toggle('has-active', !!g.querySelector('.sb-item.active'));
+  });
+}
+
+// Navigating into a grouped page from anywhere else — a dashboard link, a
+// deep link — has to reveal it, or the click appears to do nothing.
+function revealNavGroup(page) {
+  if (!ORG_PAGES.includes(page)) return;
+  const g = document.getElementById('navgrp-' + ORG_GROUP);
+  if (g && !g.classList.contains('open')) toggleNavGroup(ORG_GROUP);
 }
 
 // The CEO has no reason to open a page he doesn't know is holding anything,
@@ -2299,6 +2394,8 @@ function sp(page) {
   const nel = document.getElementById('nav-' + page);
   if (pel) { pel.classList.add('active'); render(page); }
   if (nel) nel.classList.add('active');
+  revealNavGroup(page);
+  syncNavGroups();
   const titles = {
     dashboard: 'Dashboard', tasks: 'Tasks', submit: 'Submit Daily Update',
     reviews: 'Task Reviews', employees: 'Employees', teams: 'Teams',
