@@ -1205,6 +1205,20 @@
     .ring-leg-val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 700; color: var(--text-primary); }
     .ring-leg-lab { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
 
+    /* Brief highlight on the review card a manager was sent to from a task
+       row. Fades rather than latching: it answers "which one did I click",
+       and a permanent marker would then be a second, meaningless state. */
+    .review-focus {
+      animation: reviewFocus 2.2s ease-out;
+    }
+    @keyframes reviewFocus {
+      0%, 55% { box-shadow: 0 0 0 2px var(--accent-ink); }
+      100%    { box-shadow: 0 0 0 2px transparent; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .review-focus { animation: none; box-shadow: 0 0 0 2px var(--accent-ink); }
+    }
+
     /* ── Weekly bars: hover tooltip + today marker ── */
     /* Taller on the dashboard so the chart fills its card next to the ring
        gauge instead of floating in dead space. */
@@ -1674,6 +1688,7 @@
         <div id="page-tasks"         class="page"></div>
         <div id="page-submit"        class="page"></div>
         <div id="page-reviews"       class="page"></div>
+        <div id="page-daily"         class="page"></div>
         <div id="page-employees"     class="page"></div>
         <div id="page-teams"         class="page"></div>
         <div id="page-departments"   class="page"></div>
@@ -1989,18 +2004,25 @@ function lateInfo(t) {
 }
 
 // The cell shown in the tasks table: dot + proximity label + effort.
-// The hours line is labelled by state — it's an estimate until the employee
-// submits, and their logged time afterwards. Same field, two meanings.
+//
+// Estimate and actual are two separate fields now, so both can show at once —
+// "12h est · 5h logged" is the comparison the single conflated field could
+// never make. Rows written before the split have no estimateHours and fall
+// back to the old one-number behaviour.
 function deadlineCell(t) {
-  const dl = deadlineInfo(t);
-  const lt = lateInfo(t);
-  const hrs = t.hours || 0;
+  const dl  = deadlineInfo(t);
+  const lt  = lateInfo(t);
+  const est = Number(t.estimateHours) || (t.submittedAt ? 0 : Number(t.hours) || 0);
+  const act = t.submittedAt ? (Number(t.hours) || 0) : 0;
+  const bits = [];
+  if (est) bits.push(`${est}h est`);
+  if (act) bits.push(`${act}h logged`);
   return `
     <div class="dl ${dl.tone}">
       <span class="dl-dot"></span>
       <div>
         <div class="dl-label">${dl.label}</div>
-        ${hrs ? `<div class="dl-sub">${hrs}h ${t.submittedAt ? 'logged' : 'est'}</div>` : ''}
+        ${bits.length ? `<div class="dl-sub">${bits.join(' · ')}</div>` : ''}
       </div>
     </div>
     ${lt.tier ? `<div style="margin-top:3px"><span class="late-tag">Late ${lt.by}</span></div>` : ''}`;
@@ -2238,14 +2260,15 @@ function getNavItems() {
   if (r === 'employee') return [
     ...base,
     { icon: 'tasks',         label: 'My Tasks',       page: 'tasks' },
-    { icon: 'submit',        label: 'Submit Update',  page: 'submit' },
+    { icon: 'submit',        label: 'Daily Update',   page: 'submit' },
     { icon: 'notifications', label: 'Notifications',  page: 'notifications' },
     { icon: 'settings',      label: 'Settings',       page: 'settings' },
   ];
   if (r === 'hr') return [
     ...base,
     { icon: 'tasks',        label: 'My Tasks',      page: 'tasks' },
-    { icon: 'submit',       label: 'Submit Update', page: 'submit' },
+    { icon: 'submit',       label: 'Daily Update',  page: 'submit' },
+    { icon: 'calendar',     label: 'Daily Work',    page: 'daily' },
     { icon: 'employees',    label: 'Employees',     page: 'employees' },
     { icon: 'teams',        label: 'Teams',         page: 'teams' },
     { icon: 'departments',  label: 'Departments',   page: 'departments' },
@@ -2256,6 +2279,10 @@ function getNavItems() {
   if (r === 'manager') return [
     ...base,
     { icon: 'tasks',         label: 'Team Tasks',     page: 'tasks' },
+    // Sits above Reports on purpose. Seeing what the team did today is a daily
+    // habit; generating a report is an occasional one, and routing the habit
+    // through the report builder is what stopped managers from looking.
+    { icon: 'calendar',      label: 'Daily Work',     page: 'daily' },
     { icon: 'teams',         label: 'My Team',        page: 'teams' },
     { icon: 'reviews',       label: 'Reviews',        page: 'reviews' },
     { icon: 'reports',       label: 'Reports',        page: 'reports' },
@@ -2265,6 +2292,7 @@ function getNavItems() {
   if (r === 'admin') return [
     ...base,
     { icon: 'tasks',       label: 'All Tasks',    page: 'tasks' },
+    { icon: 'calendar',    label: 'Daily Work',   page: 'daily' },
     { icon: 'employees',   label: 'Employees',    page: 'employees' },
     { icon: 'teams',       label: 'Teams',        page: 'teams' },
     { icon: 'reports',     label: 'Reports',      page: 'reports' },
@@ -2274,6 +2302,7 @@ function getNavItems() {
   return [
     ...base,
     { icon: 'tasks',       label: 'All Tasks',    page: 'tasks' },
+    { icon: 'calendar',    label: 'Daily Work',   page: 'daily' },
     // The CEO's queue. Sits directly under the org-chart pages it governs,
     // and above Reports, because an unapproved change makes the reports wrong.
     { icon: 'check',       label: 'Approvals',    page: 'approvals' },
@@ -2397,8 +2426,8 @@ function sp(page) {
   revealNavGroup(page);
   syncNavGroups();
   const titles = {
-    dashboard: 'Dashboard', tasks: 'Tasks', submit: 'Submit Daily Update',
-    reviews: 'Task Reviews', employees: 'Employees', teams: 'Teams',
+    dashboard: 'Dashboard', tasks: 'Tasks', submit: 'Daily Update',
+    daily: 'Daily Work', reviews: 'Task Reviews', employees: 'Employees', teams: 'Teams',
     departments: 'Departments', reports: 'Reports & Analytics',
     audit: 'Audit Log', notifications: 'Notifications', settings: 'Settings',
     files: 'Files',
@@ -2412,6 +2441,7 @@ function sp(page) {
 async function render(page) {
   const fns = {
     dashboard: rdDash, tasks: rdTasks, submit: rdSubmit, reviews: rdReviews,
+    daily: rdDaily,
     employees: rdEmployees, teams: rdTeams, departments: rdDepts,
     reports: rdReports, audit: rdAudit, notifications: rdNotifs, settings: rdSettings,
     files: rdFiles, approvals: rdApprovals,
@@ -2854,7 +2884,11 @@ async function assignTaskModal() {
         </select>
       </div>
       <div class="form-group"><label class="form-label">Expected Hours</label>
-        <input class="form-input" type="number" id="at_hrs" min="0" max="24" step=".5" value="0"></div>
+        <input class="form-input" type="number" id="at_hrs" min="0" step=".5" value="0" placeholder="e.g. 40">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+          Total effort for the whole task, not one day's worth — a job that runs a week is 40, not 8.
+        </div>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Deadline</label>
@@ -2880,8 +2914,10 @@ async function assignTaskModal() {
             date:        document.getElementById('at_date').value || today(),
             title,
             project,
-            priority:    document.getElementById('at_pri').value,
-            hours:       Number(document.getElementById('at_hrs').value) || 0,
+            priority:      document.getElementById('at_pri').value,
+            // The manager's estimate. It no longer shares a field with the
+            // employee's logged hours, so submitting work can't overwrite it.
+            estimateHours: Number(document.getElementById('at_hrs').value) || 0,
             // Blank falls through to the server default (task date @ 17:00)
             dueDate:     document.getElementById('at_due').value || undefined,
             description: document.getElementById('at_desc').value.trim(),
@@ -2892,12 +2928,24 @@ async function assignTaskModal() {
   ]);
 }
 
-async function startTask(id) {
-  try {
-    await PUT('/tasks/' + id, { status: 'in-progress' });
-    toast('Task started', 'You can now log progress on this task.', 'success');
-    loadTasks();
-  } catch (e) { toast('Failed to start task', e.message, 'error'); }
+// Is this row the signed-in person's own work?
+const isMine = t => getId(t.userId) === (CU._id || CU.id);
+
+// There is no longer a Start button, and no inline status edit. Progress on a
+// task is reported through the daily update and nowhere else — two ways to
+// move the same task produced rows sitting at "in progress" with nothing
+// written against them, which no reviewer could act on.
+function submitForTask(id) {
+  DU_PRESELECT = id;
+  sp('submit');
+}
+
+// Reviewing happens on the Reviews page, which shows the submitted update in
+// full. The old inline approve was one click from a list that displayed none
+// of the work it was approving.
+function reviewTask(id) {
+  RV_FOCUS = id;
+  sp('reviews');
 }
 
 async function loadTasks() {
@@ -2941,10 +2989,11 @@ async function loadTasks() {
             <td style="min-width:118px">${deadlineCell(t)}</td>
             <td>${reviewStatus}</td>
             <td><div class="tbl-actions">
-              ${t.assignedBy && t.status === 'not-started' && getId(t.userId) === (CU._id || CU.id)
-                ? `<button class="btn btn-primary btn-xs" onclick="startTask('${t._id}')" title="Start working on this task">${IC.plus} Start</button>` : ''}
               <button class="btn btn-secondary btn-xs" onclick="viewTask('${t._id}')" title="View details">${IC.eye}</button>
-              ${canReview && !t.approved ? `<button class="btn btn-success btn-xs" onclick="quickApprove('${t._id}')" title="Quick approve">${IC.check}</button>` : ''}
+              ${isMine(t) && !t.approved
+                ? `<button class="btn btn-primary btn-xs" onclick="submitForTask('${t._id}')" title="Report progress on this task in your daily update">${IC.submit} Submit</button>` : ''}
+              ${canReview && t.submittedAt && !t.approved && !t.rejected
+                ? `<button class="btn btn-success btn-xs" onclick="reviewTask('${t._id}')" title="Review this submission">${IC.reviews} Review</button>` : ''}
               ${canReview ? `<button class="btn btn-danger btn-xs" onclick="deleteTask('${t._id}','${t.title.replace(/'/g,"\\'")}',loadTasks)" title="Delete task">${IC.trash}</button>` : ''}
             </div></td>
           </tr>`;
@@ -2968,7 +3017,6 @@ async function viewTask(id) {
     const { tasks } = await GET('/tasks?limit=5000');
     const t = tasks.find(x => x._id === id);
     if (!t) { toast('Not found', 'Task could not be loaded.', 'error'); return; }
-    const canReview = ['manager','admin','superadmin'].includes(CU.role) && !t.approved;
     const u = t.userId;
 
     openModal('Task Details',
@@ -2978,10 +3026,11 @@ async function viewTask(id) {
         <div><div class="profile-field-label">Project</div><div class="profile-field-val">${t.project}</div></div>
         <div><div class="profile-field-label">Status</div><div style="margin-top:2px">${sbadge(t.status)}</div></div>
         <div><div class="profile-field-label">Priority</div><div style="margin-top:2px">${pbadge(t.priority)}</div></div>
-        <div><div class="profile-field-label">Hours</div><div class="profile-field-val">${t.startTime} – ${t.endTime} (${t.hours}h)</div></div>
+        <div><div class="profile-field-label">Estimated</div><div class="profile-field-val">${Number(t.estimateHours) || 0}h</div></div>
+        <div><div class="profile-field-label">Hours Logged</div><div class="profile-field-val">${t.submittedAt ? (Number(t.hours) || 0) + 'h' : 'Not submitted yet'}</div></div>
         <div><div class="profile-field-label">Deadline</div><div class="profile-field-val">${deadlineCell(t)}</div></div>
       </div>
-      <div class="profile-field-label">Description</div>
+      <div class="profile-field-label">Work Done</div>
       <div style="padding:10px;background:var(--bg-raised);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6">${t.description || t.desc || 'No description provided.'}</div>
       <div class="profile-field-label" style="margin-bottom:6px">Completion</div>
       ${pbar(t.completion)}
@@ -2989,258 +3038,586 @@ async function viewTask(id) {
       ${t.challenges ? `<div class="review-challenge">${IC.alert}<span>${t.challenges}</span></div>` : ''}
       ${t.nextPlan ? `<div style="margin-bottom:12px"><div class="profile-field-label">Next Day Plan</div><div style="font-size:13px;color:var(--text-secondary);margin-top:4px">${t.nextPlan}</div></div>` : ''}
       ${t.mgComment ? `<div class="feedback-block" style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:center;justify-content:space-between"><div class="feedback-block-label">Manager Feedback</div>${['manager','admin','superadmin'].includes(CU.role) ? `<button class="btn btn-xs" style="background:var(--red-wash);color:var(--red-ink)" onclick="clearReview('${t._id}')" title="Delete this feedback">${IC.trash} Remove</button>` : ''}</div><div class="feedback-block-text">${t.mgComment}</div>${t.mgRating ? `<div>${stars(t.mgRating)}</div>` : ''}</div>` : ''}
-      ${canReview ? `<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
-        <div class="profile-field-label" style="margin-bottom:8px">Add Review</div>
-        <div class="form-group"><textarea class="form-textarea" id="rvCmt" placeholder="Write your feedback…">${t.mgComment || ''}</textarea></div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <select class="form-select" style="width:auto" id="rvRat">
-            <option value="">Rate this task</option>
-            ${[1,2,3,4,5].map(n => `<option value="${n}">${'★'.repeat(n)} ${n}/5</option>`).join('')}
-          </select>
-          <button class="btn btn-success btn-sm" onclick="doReview('${t._id}','approve')">${IC.check} Approve</button>
-          <button class="btn btn-danger btn-sm"  onclick="doReview('${t._id}','reject')">${IC.x} Reject</button>
-        </div>
-      </div>` : ''}
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
         <div class="profile-field-label" style="margin-bottom:2px">Attachments</div>
         <div id="taskFilesBox"><div class="file-empty">Loading files…</div></div>
-      </div>`,
+      </div>
+      ${['manager','admin','superadmin'].includes(CU.role) && t.submittedAt && !t.approved && !t.rejected
+        ? `<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
+             <button class="btn btn-primary btn-sm" onclick="closeModal();reviewTask('${t._id}')">${IC.reviews} Review this submission</button>
+           </div>`
+        : ''}`,
       null, true
     );
 
-    // Populated after the modal is in the DOM — the attachment list is a
-    // second request and should not hold up the details the user asked for.
-    loadTaskFiles(t._id);
+    // Read-only, deliberately. This dialog is reached from every list in the
+    // app, including ones that show no context for the work — approving from
+    // here meant deciding on a task from a row of badges. The button above
+    // hands off to Reviews, which shows the submitted update in full.
+    //
+    // Populated after the modal is in the DOM: the attachment list is a second
+    // request and should not hold up the details the user asked for.
+    loadTaskFiles(t._id, { readOnly: true });
   } catch (e) { toast('Error', e.message, 'error'); }
 }
 
-async function doReview(id, action) {
-  try {
-    const comment = document.getElementById('rvCmt')?.value || '';
-    const rating  = parseInt(document.getElementById('rvRat')?.value) || null;
-    await PUT('/tasks/' + id + '/review', { action, comment, rating });
-    closeModal();
-    toast(action === 'approve' ? 'Task approved' : 'Task rejected', '', action === 'approve' ? 'success' : 'error');
-    loadTasks();
-  } catch (e) { toast('Review failed', e.message, 'error'); }
+// ═══════════════════════════════════════════════════════
+//  DAILY UPDATE
+// ═══════════════════════════════════════════════════════
+// A working day is several pieces of work, so this form is a list of entries
+// rather than one fixed set of fields. The old single-entry form is why people
+// stapled a second task onto the end of the first one's description, where no
+// report could ever count it.
+//
+// Each entry points at either a task a manager assigned, or "Other /
+// Self-Initiated" for work nobody handed out — which is most of what a busy
+// day is actually made of, and previously had nowhere to go.
+//
+// Rows live in DU_ROWS rather than in the DOM because adding or removing one
+// re-renders the list, and anything half-typed has to survive that. The one
+// thing the DOM cannot give back is a file input's selection, which is why
+// chosen files are held on the row too.
+
+let DU_ROWS      = [];    // entries currently on screen
+let DU_ASSIGNED  = [];    // open tasks a manager assigned to me
+let DU_SEQ       = 0;     // row key source
+let DU_PRESELECT = null;  // task to open focused on — set by submitForTask()
+
+const DU_OTHER = '__other__';
+
+function duBlank(taskId = '') {
+  return {
+    key: 'du' + (++DU_SEQ),
+    taskId, title: '', project: '',
+    status: 'in-progress', completion: 0, hours: 1,
+    description: '', challenges: '', support: '',
+    files: [],
+  };
 }
 
-async function quickApprove(id) {
-  try {
-    await PUT('/tasks/' + id + '/review', { action: 'approve', comment: 'Approved' });
-    toast('Task approved', '', 'success');
-    loadTasks();
-  } catch (e) { toast('Failed', e.message, 'error'); }
-}
-
-// ═══════════════════════════════════════════════════════
-//  SUBMIT DAILY UPDATE
-// ═══════════════════════════════════════════════════════
-let _assignedPickList = [];
-
-function applyAssignedTask() {
-  const id      = document.getElementById('tf_pick').value;
-  const titleEl = document.getElementById('tf_title');
-  const projEl  = document.getElementById('tf_proj');
-
-  if (id === 'custom') {
-    titleEl.value = '';
-    projEl.value  = '';
-    titleEl.readOnly = false;
-    projEl.readOnly  = false;
-    titleEl.style.background = '';
-    projEl.style.background  = '';
-    return;
-  }
-
-  const t = _assignedPickList.find(x => x._id === id);
-  if (!t) return;
-  titleEl.value = t.title;
-  projEl.value  = t.project;
-  titleEl.readOnly = true;
-  projEl.readOnly  = true;
-  titleEl.style.background = 'var(--bg-raised)';
-  projEl.style.background  = 'var(--bg-raised)';
-  document.getElementById('tf_desc').value = t.description || '';
-  const priEl = document.getElementById('tf_pri');
-  if (priEl) priEl.value = t.priority;
+// Work fields are only carried over from a task that has already been reported
+// on today. For a fresh assignment they stay empty on purpose: `description`
+// there holds the manager's brief, and pre-filling it as "work done" invites
+// people to submit the instructions back as their own report.
+function duFromTask(t) {
+  const reported = !!t.submittedAt;
+  return {
+    key: 'du' + (++DU_SEQ),
+    taskId: t._id,
+    title: t.title || '', project: t.project || '',
+    status:     reported ? (t.status || 'in-progress') : 'in-progress',
+    completion: reported ? Number(t.completion) || 0 : 0,
+    hours:      reported ? Number(t.hours) || 0 : 1,
+    description: reported ? (t.description || '') : '',
+    challenges:  reported ? (t.challenges || '') : '',
+    support:     reported && t.support && t.support !== 'No' ? t.support : '',
+    files: [],
+    known: true,
+  };
 }
 
 async function rdSubmit() {
   const el = document.getElementById('page-submit');
   pageLoader(el);
-  let existing = null;
-  try {
-    const { tasks } = await GET('/tasks?date=' + today());
-    existing = tasks.find(t => getId(t.userId) === CU._id || getId(t.userId) === CU.id);
-  } catch(e) {}
 
-  let assignedTasks = [];
-  try {
-    const { tasks } = await GET('/tasks?limit=100');
-    assignedTasks = tasks.filter(t => t.assignedBy && (t.status !== 'completed' || (existing && t._id === existing._id)));
-  } catch(e) {}
-  _assignedPickList = assignedTasks;
+  const myId     = CU._id || CU.id;
+  const todayStr = today();
 
-  const ex = existing;
-  const pickedId = ex?.assignedBy ? ex._id : 'custom';
-  el.innerHTML = `<div style="max-width:740px;margin:0 auto">
-    <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Daily Update — ${fmtDate(today())}</div>
-          <div class="card-subtitle">${ex ? 'Editing your existing submission for today' : 'Submit your end-of-day task update'}</div>
-        </div>
-        ${ex ? `<span class="badge badge-blue">${IC.info} Already submitted</span>` : ''}
+  let mine = [];
+  try {
+    const { tasks } = await GET('/tasks?limit=200');
+    mine = tasks.filter(t => getId(t.userId) === myId);
+  } catch (e) { /* an empty picker is still a usable form */ }
+
+  DU_ASSIGNED = mine.filter(t => t.assignedBy && t.status !== 'completed');
+
+  // Anything already reported today comes back as an editable row, so
+  // re-opening the page amends the day's update instead of duplicating it.
+  DU_ROWS = mine.filter(t => t.date === todayStr && t.submittedAt).map(duFromTask);
+
+  if (DU_PRESELECT && !DU_ROWS.some(r => r.taskId === DU_PRESELECT)) {
+    const t = mine.find(x => x._id === DU_PRESELECT);
+    DU_ROWS.push(t ? duFromTask(t) : duBlank());
+  }
+  DU_PRESELECT = null;
+
+  if (!DU_ROWS.length) DU_ROWS.push(duBlank());
+
+  duRender();
+}
+
+// Read every visible field back into DU_ROWS. Called before anything that
+// re-renders, which is the only reason typed text survives adding a row.
+function duSync() {
+  DU_ROWS.forEach(r => {
+    const g = prefix => document.getElementById(prefix + r.key);
+    if (!g('du_task_')) return;
+    r.taskId      = g('du_task_').value;
+    if (g('du_title_')) r.title   = g('du_title_').value.trim();
+    if (g('du_proj_'))  r.project = g('du_proj_').value.trim();
+    r.description = g('du_desc_')?.value ?? r.description;
+    r.status      = g('du_status_')?.value ?? r.status;
+    r.completion  = Number(g('du_comp_')?.value ?? r.completion) || 0;
+    const h = g('du_hrs_')?.value;
+    r.hours       = h === '' || h === undefined ? 0 : Number(h) || 0;
+    r.challenges  = g('du_chal_')?.value ?? r.challenges;
+    r.support     = g('du_sup_')?.value ?? r.support;
+  });
+}
+
+function duAdd()          { duSync(); DU_ROWS.push(duBlank()); duRender(); }
+function duRemove(key)    { duSync(); DU_ROWS = DU_ROWS.filter(r => r.key !== key); if (!DU_ROWS.length) DU_ROWS.push(duBlank()); duRender(); }
+function duPick()         { duSync(); duRender(); }
+
+function duFilesAdd(key) {
+  const input = document.getElementById('du_file_' + key);
+  const chosen = [...(input?.files || [])];
+  duSync();
+  const r = DU_ROWS.find(x => x.key === key);
+  chosen.forEach(file => {
+    if (!r.files.some(x => x.name === file.name && x.size === file.size)) r.files.push(file);
+  });
+  duRender();
+}
+
+function duFileRemove(key, idx) {
+  duSync();
+  DU_ROWS.find(x => x.key === key)?.files.splice(idx, 1);
+  duRender();
+}
+
+function duRowHtml(r, i) {
+  const isOther  = r.taskId === DU_OTHER;
+  const assigned = DU_ASSIGNED.find(t => t._id === r.taskId);
+  // A task already reported on today may no longer be in the assigned list —
+  // it can be self-initiated, or completed since. Keep its own option or the
+  // select would silently reset the row to "Select a task…".
+  const orphan = r.known && r.taskId && !isOther && !assigned;
+
+  return `<div class="card mb" id="durow-${r.key}">
+    <div class="card-header">
+      <div class="card-title">Task ${i + 1}</div>
+      ${DU_ROWS.length > 1
+        ? `<button class="btn btn-danger btn-xs" onclick="duRemove('${r.key}')" title="Remove this task from the update">${IC.trash} Remove</button>`
+        : ''}
+    </div>
+    <div class="card-body">
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Task <span style="color:var(--red-ink)">*</span></label>
+        <select class="form-select" id="du_task_${r.key}" onchange="duPick()">
+          <option value="" ${!r.taskId ? 'selected' : ''}>Select a task…</option>
+          ${DU_ASSIGNED.map(t => `<option value="${t._id}" ${r.taskId === t._id ? 'selected' : ''}>${esc(t.title)} — ${esc(t.project)}</option>`).join('')}
+          ${orphan ? `<option value="${r.taskId}" selected>${esc(r.title)} — ${esc(r.project)}</option>` : ''}
+          <option value="${DU_OTHER}" ${isOther ? 'selected' : ''}>Other / Self-Initiated Task</option>
+        </select>
+        ${assigned?.description
+          ? `<div style="margin-top:6px;padding:8px 10px;background:var(--bg-raised);border-radius:var(--radius);font-size:12px;color:var(--text-secondary);line-height:1.5">
+               <strong style="color:var(--text-muted)">Brief:</strong> ${esc(assigned.description)}
+             </div>`
+          : ''}
       </div>
-      <div class="card-body">
-        ${assignedTasks.length ? `<div class="form-group" style="margin-bottom:14px">
-          <label class="form-label">Task</label>
-          <select class="form-select" id="tf_pick" onchange="applyAssignedTask()">
-            <option value="custom" ${pickedId==='custom'?'selected':''}>Custom Task</option>
-            ${assignedTasks.map(t => `<option value="${t._id}" ${pickedId===t._id ? 'selected' : ''}>${t.title} — ${t.project}${t.assignedBy?.name ? ' (from ' + t.assignedBy.name + ')' : ''}</option>`).join('')}
+
+      ${isOther ? `<div class="form-row" style="margin-bottom:14px">
+        <div class="form-group">
+          <label class="form-label">What was it? <span style="color:var(--red-ink)">*</span></label>
+          <input class="form-input" id="du_title_${r.key}" placeholder="Brief title…" value="${esc(r.title)}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Project</label>
+          <input class="form-input" id="du_proj_${r.key}" placeholder="Optional" value="${esc(r.project)}">
+        </div>
+      </div>` : ''}
+
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Work Done <span style="color:var(--red-ink)">*</span></label>
+        <textarea class="form-textarea" id="du_desc_${r.key}" placeholder="What did you actually do on this today?" style="min-height:74px">${esc(r.description)}</textarea>
+      </div>
+
+      <div class="form-row3" style="margin-bottom:14px">
+        <div class="form-group">
+          <label class="form-label">Status <span style="color:var(--red-ink)">*</span></label>
+          <select class="form-select" id="du_status_${r.key}">
+            ${[['in-progress','In Progress'],['completed','Completed'],['delayed','Delayed'],['on-hold','On Hold'],['not-started','Not Started']]
+              .map(([v, l]) => `<option value="${v}" ${r.status === v ? 'selected' : ''}>${l}</option>`).join('')}
           </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Progress — <strong id="du_compval_${r.key}">${r.completion}%</strong></label>
+          <input type="range" id="du_comp_${r.key}" min="0" max="100" value="${r.completion}"
+            oninput="document.getElementById('du_compval_${r.key}').textContent=this.value+'%'">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hours Worked</label>
+          <input class="form-input" type="number" id="du_hrs_${r.key}" min="0" max="24" step=".5" value="${r.hours}">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group">
+          <label class="form-label">Blockers</label>
+          <textarea class="form-textarea" id="du_chal_${r.key}" placeholder="Anything holding this up?" style="min-height:60px">${esc(r.challenges)}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Support Needed</label>
+          <textarea class="form-textarea" id="du_sup_${r.key}" placeholder="Anything you need from someone?" style="min-height:60px">${esc(r.support)}</textarea>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Attachments</label>
+        ${r.files.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
+          ${r.files.map((file, fi) => `<div class="file-row">
+            <div class="file-ic">${IC.files}</div>
+            <div class="file-meta">
+              <div class="file-name">${esc(file.name)}</div>
+              <div class="file-sub">${fmtBytes(file.size)} · uploads when you submit</div>
+            </div>
+            <div class="file-actions">
+              <button class="btn btn-xs" style="background:var(--red-wash);color:var(--red-ink)" onclick="duFileRemove('${r.key}',${fi})" title="Remove">${IC.x}</button>
+            </div>
+          </div>`).join('')}
         </div>` : ''}
-        <div class="form-row" style="margin-bottom:14px">
-          <div class="form-group">
-            <label class="form-label">Task Title <span style="color:var(--red-ink)">*</span></label>
-            <input class="form-input" id="tf_title" placeholder="Brief task title…" value="${ex?.title || ''}" ${pickedId!=='custom'?'readonly style="background:var(--bg-raised)"':''}>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Project <span style="color:var(--red-ink)">*</span></label>
-            <input class="form-input" id="tf_proj" placeholder="Project name…" value="${ex?.project || ''}" ${pickedId!=='custom'?'readonly style="background:var(--bg-raised)"':''}>
-          </div>
-        </div>
-
-        <div class="form-group" style="margin-bottom:14px">
-          <label class="form-label">Description</label>
-          <textarea class="form-textarea" id="tf_desc" placeholder="What did you work on today? Describe your tasks, progress, and output…">${ex?.description || ex?.desc || ''}</textarea>
-        </div>
-
-        <div class="form-row" style="margin-bottom:14px">
-          <div class="form-group">
-            <label class="form-label">Status <span style="color:var(--red-ink)">*</span></label>
-            <select class="form-select" id="tf_status">
-              <option value="">Select status…</option>
-              <option value="completed"   ${ex?.status==='completed'   ?'selected':''}>Completed</option>
-              <option value="in-progress" ${ex?.status==='in-progress' ?'selected':''}>In Progress</option>
-              <option value="not-started" ${ex?.status==='not-started' ?'selected':''}>Not Started</option>
-              <option value="delayed"     ${ex?.status==='delayed'     ?'selected':''}>Delayed</option>
-              <option value="on-hold"     ${ex?.status==='on-hold'     ?'selected':''}>On Hold</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Priority <span style="color:var(--red-ink)">*</span></label>
-            <select class="form-select" id="tf_pri">
-              <option value="">Select priority…</option>
-              <option value="critical" ${ex?.priority==='critical'?'selected':''}>Critical</option>
-              <option value="high"     ${ex?.priority==='high'    ?'selected':''}>High</option>
-              <option value="medium"   ${ex?.priority==='medium'  ?'selected':''}>Medium</option>
-              <option value="low"      ${ex?.priority==='low'     ?'selected':''}>Low</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-row3" style="margin-bottom:14px">
-          <div class="form-group">
-            <label class="form-label">Start Time</label>
-            <input class="form-input" type="time" id="tf_start" value="${ex?.startTime || '09:00'}">
-          </div>
-          <div class="form-group">
-            <label class="form-label">End Time</label>
-            <input class="form-input" type="time" id="tf_end" value="${ex?.endTime || '17:30'}">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Hours Worked</label>
-            <input class="form-input" type="number" id="tf_hrs" min="0" max="24" step=".5" value="${ex?.hours || 8}">
-          </div>
-        </div>
-
-        <div class="form-group" style="margin-bottom:14px">
-          <label class="form-label">Completion — <strong id="cval">${ex?.completion || 50}%</strong></label>
-          <input type="range" id="tf_comp" min="0" max="100" value="${ex?.completion || 50}"
-            oninput="document.getElementById('cval').textContent=this.value+'%'">
-        </div>
-
-        <div class="form-row" style="margin-bottom:14px">
-          <div class="form-group">
-            <label class="form-label">Challenges / Blockers</label>
-            <textarea class="form-textarea" id="tf_chal" placeholder="Any technical blockers, dependencies, or challenges?" style="min-height:70px">${ex?.challenges || ''}</textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Support Required</label>
-            <textarea class="form-textarea" id="tf_sup" placeholder="Do you need help or resources from anyone?" style="min-height:70px">${ex?.support || 'No'}</textarea>
-          </div>
-        </div>
-
-        <div class="form-group" style="margin-bottom:20px">
-          <label class="form-label">Tomorrow's Plan</label>
-          <textarea class="form-textarea" id="tf_next" placeholder="What will you work on tomorrow?" style="min-height:70px">${ex?.nextPlan || ''}</textarea>
-        </div>
-
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="btn btn-secondary" onclick="sp('tasks')">${IC.x} Cancel</button>
-          ${ex ? `<button class="btn btn-warning btn-sm" title="Clear description, challenges, and support text" onclick="clearTaskTextFields()" style="margin-right:auto">${IC.trash} Clear Text Fields</button>` : ''}
-          <button class="btn btn-primary" id="submitBtn" onclick="submitTask('${ex?._id || ''}')">${IC.submit} ${ex ? 'Update' : 'Submit'} Daily Update</button>
-        </div>
+        <input type="file" class="file-input" id="du_file_${r.key}" multiple onchange="duFilesAdd('${r.key}')">
+        <div class="file-hint" style="margin-top:5px">Optional. Attached to this task when the update is submitted.</div>
       </div>
     </div>
   </div>`;
 }
 
-async function submitTask(existingId) {
-  const title  = document.getElementById('tf_title').value.trim();
-  const proj   = document.getElementById('tf_proj').value.trim();
-  const status = document.getElementById('tf_status').value;
-  const pri    = document.getElementById('tf_pri').value;
+function duRender() {
+  const el = document.getElementById('page-submit');
+  el.innerHTML = `<div style="max-width:860px;margin:0 auto">
+    <div class="card mb">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Daily Update — ${fmtDate(today())}</div>
+          <div class="card-subtitle">Add every task you worked on today, then send them together.</div>
+        </div>
+        <span class="badge badge-blue">${DU_ROWS.length} task${DU_ROWS.length === 1 ? '' : 's'}</span>
+      </div>
+    </div>
+    <div id="duRows">${DU_ROWS.map(duRowHtml).join('')}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">
+      <button class="btn btn-secondary" onclick="duAdd()">${IC.plus} Add another task</button>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="sp('tasks')">${IC.x} Cancel</button>
+        <button class="btn btn-primary" id="duSubmitBtn" onclick="duSubmit()">${IC.submit} Submit Daily Update</button>
+      </div>
+    </div>
+  </div>`;
+}
 
-  if (!title || !proj || !status || !pri) {
-    toast('Validation error', 'Please fill in all required fields.', 'error'); return;
+async function duSubmit() {
+  duSync();
+
+  const entries = [];
+  for (let i = 0; i < DU_ROWS.length; i++) {
+    const r   = DU_ROWS[i];
+    const pos = `Task ${i + 1}`;
+
+    if (!r.taskId) {
+      toast('Pick a task', `${pos}: choose one of your tasks, or "Other / Self-Initiated Task".`, 'error'); return;
+    }
+    if (r.taskId === DU_OTHER && !r.title) {
+      toast('Title required', `${pos}: give the work a short title.`, 'error'); return;
+    }
+    if (!r.description.trim()) {
+      toast('Work done required', `${pos}: describe what you actually did.`, 'error'); return;
+    }
+
+    entries.push({
+      taskId:      r.taskId === DU_OTHER ? undefined : r.taskId,
+      title:       r.title,
+      project:     r.project,
+      description: r.description,
+      status:      r.status,
+      completion:  r.completion,
+      hours:       r.hours,
+      challenges:  r.challenges,
+      support:     r.support,
+    });
   }
 
-  const btn = document.getElementById('submitBtn');
-  btn.disabled = true;
+  const btn = document.getElementById('duSubmitBtn');
+  btn.disabled  = true;
   btn.innerHTML = `<span class="spin">${IC.spinner}</span> Saving…`;
 
-  const body = {
-    title, project: proj,
-    description: document.getElementById('tf_desc').value,
-    priority: pri, status,
-    startTime: document.getElementById('tf_start').value,
-    endTime:   document.getElementById('tf_end').value,
-    hours:     parseFloat(document.getElementById('tf_hrs').value) || 0,
-    completion: parseInt(document.getElementById('tf_comp').value) || 0,
-    challenges: document.getElementById('tf_chal').value,
-    support:    document.getElementById('tf_sup').value,
-    nextPlan:   document.getElementById('tf_next').value,
-  };
-
   try {
-    if (existingId) { await PUT('/tasks/' + existingId, body); toast('Update saved', 'Your daily update has been updated.', 'success'); }
-    else            { await POST('/tasks', body);               toast('Update submitted', 'Your daily update has been submitted.', 'success'); }
+    const { tasks } = await POST('/tasks/daily-update', { entries });
+
+    // Files go up after the entries, because an attachment needs the id of the
+    // task it belongs to and that id does not exist until the entry is saved.
+    // The update itself is already safe by this point, so a failed upload is
+    // reported on its own rather than throwing the day's work away.
+    const failed = [];
+    for (let i = 0; i < DU_ROWS.length; i++) {
+      const task = tasks[i];
+      if (!task) continue;
+      for (const file of DU_ROWS[i].files) {
+        try { await doUpload(file, { kind: 'task-attachment', taskId: task._id }); }
+        catch (e) { failed.push(file.name); }
+      }
+    }
+
+    if (failed.length) {
+      toast('Update saved, some files did not upload',
+        `${failed.join(', ')} — send them from the Files page instead.`, 'warning', 8000);
+    } else {
+      toast('Daily update submitted',
+        `${entries.length} task${entries.length === 1 ? '' : 's'} sent to your manager.`, 'success');
+    }
     sp('tasks');
   } catch (e) {
     toast('Submission failed', e.message, 'error');
-    btn.disabled = false;
-    btn.innerHTML = `${IC.submit} ${existingId ? 'Update' : 'Submit'} Daily Update`;
+    btn.disabled  = false;
+    btn.innerHTML = `${IC.submit} Submit Daily Update`;
   }
 }
 
-function clearTaskTextFields() {
-  const fields = ['tf_desc', 'tf_chal', 'tf_sup', 'tf_next'];
-  fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  toast('Fields cleared', 'Description, challenges, support, and next plan have been cleared. Hit Update to save.', 'info');
+// ═══════════════════════════════════════════════════════
+//  DAILY WORK
+// ═══════════════════════════════════════════════════════
+// Answers "what did my people do today?" without going through the report
+// builder. Reports are for a period and a rollup; this is for a day and the
+// actual words people wrote, and making managers generate a report to read
+// six sentences is why most of them stopped reading them.
+//
+// The same page serves the CEO's department view. It is the same question at
+// a different altitude — department, then person, then their updates — so it
+// is one page with a wider lens rather than a second implementation.
+
+let DW_MODE  = 'updates';   // 'updates' | 'people'
+let DW_DEPT  = '';          // '' = every department
+let DW_DEPTS = [];
+let DW_TEAMS = [];
+let DW_USERS = [];
+
+// Who gets department tabs and the people view: the roles whose remit is more
+// than one team. A manager has exactly one world and tabs across it would be
+// a row with a single tab in it.
+const dwWide = () => ['superadmin', 'admin', 'hr'].includes(CU.role);
+
+async function rdDaily() {
+  const el = document.getElementById('page-daily');
+  pageLoader(el);
+
+  const myId = CU._id || CU.id;
+
+  const [deptsRes, teamsRes, usersRes] = await Promise.all([
+    GET('/departments').catch(() => ({ departments: [] })),
+    GET('/teams').catch(()       => ({ teams: [] })),
+    GET('/users?active=true').catch(() => ({ users: [] })),
+  ]);
+
+  DW_DEPTS = deptsRes.departments || [];
+  DW_TEAMS = teamsRes.teams || [];
+  DW_USERS = usersRes.users || [];
+
+  // A manager's filters must not offer people they cannot see. The server
+  // scopes the data either way, but a dropdown full of names that return
+  // nothing reads as a broken page.
+  if (CU.role === 'manager') {
+    DW_TEAMS = DW_TEAMS.filter(t => getId(t.manager) === myId);
+    const mine = new Set(DW_TEAMS.flatMap(t => (t.members || []).map(m => getId(m))));
+    DW_USERS = DW_USERS.filter(u => mine.has(u._id));
+  }
+
+  el.innerHTML = `
+    ${dwWide() && DW_DEPTS.length ? `<div class="tab-bar" id="dwDeptTabs">
+      <div class="tab ${DW_DEPT === '' ? 'active' : ''}" role="button" tabindex="0"
+           onclick="dwSetDept('')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();dwSetDept('')}">All Departments</div>
+      ${DW_DEPTS.map(d => `<div class="tab ${DW_DEPT === d._id ? 'active' : ''}" role="button" tabindex="0"
+           onclick="dwSetDept('${d._id}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();dwSetDept('${d._id}')}">${esc(d.name)}</div>`).join('')}
+    </div>` : ''}
+
+    ${dwWide() ? `<div class="tab-bar" style="margin-top:-4px">
+      <div class="tab ${DW_MODE === 'updates' ? 'active' : ''}" role="button" tabindex="0"
+           onclick="dwSetMode('updates')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();dwSetMode('updates')}">Updates</div>
+      <div class="tab ${DW_MODE === 'people' ? 'active' : ''}" role="button" tabindex="0"
+           onclick="dwSetMode('people')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();dwSetMode('people')}">Employees</div>
+    </div>` : ''}
+
+    <div class="card mb" id="dwFilters" style="${DW_MODE === 'people' ? 'display:none' : ''}">
+      <div class="card-body">
+        <div class="filter-bar">
+          <input class="form-input" type="date" id="dw_date" onchange="dwLoad()" style="width:160px">
+          <select class="form-select" id="dw_user" onchange="dwLoad()">
+            <option value="">All Employees</option>
+            ${DW_USERS.map(u => `<option value="${u._id}">${esc(u.name)}</option>`).join('')}
+          </select>
+          <select class="form-select" id="dw_team" onchange="dwLoad()">
+            <option value="">All Teams</option>
+            ${DW_TEAMS.map(t => `<option value="${t._id}">${esc(t.name)}</option>`).join('')}
+          </select>
+          <select class="form-select" id="dw_status" onchange="dwLoad()">
+            <option value="">All Status</option>
+            <option value="completed">Completed</option>
+            <option value="in-progress">In Progress</option>
+            <option value="delayed">Delayed</option>
+            <option value="on-hold">On Hold</option>
+          </select>
+          <div class="filter-sep"></div>
+          <button class="btn btn-secondary btn-sm" onclick="dwReset()">${IC.refresh} Reset</button>
+          <span id="dwCount" style="font-size:11px;color:var(--text-muted);margin-left:auto;white-space:nowrap"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="dwBody"></div>`;
+
+  await dwLoad();
+}
+
+function dwSetDept(id) { DW_DEPT = id; rdDaily(); }
+function dwSetMode(m)  { DW_MODE = m;  rdDaily(); }
+
+function dwReset() {
+  ['dw_date', 'dw_user', 'dw_team', 'dw_status'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  dwLoad();
+}
+
+// Jump from a person in the Employees view straight to their updates, with the
+// filter already set. Two clicks from "which department" to "what did she
+// write", which is the whole point of the page.
+function dwViewPerson(id) {
+  DW_MODE = 'people';
+  rdDaily().then(() => {
+    DW_MODE = 'updates';
+    return rdDaily();
+  }).then(() => {
+    const sel = document.getElementById('dw_user');
+    if (sel) { sel.value = id; dwLoad(); }
+  });
+}
+
+function dwPeople() {
+  const box = document.getElementById('dwBody');
+  const people = DW_DEPT
+    ? DW_USERS.filter(u => getId(u.department) === DW_DEPT)
+    : DW_USERS;
+
+  const deptName = DW_DEPT
+    ? (DW_DEPTS.find(d => d._id === DW_DEPT)?.name || 'this department')
+    : 'the company';
+
+  box.innerHTML = people.length
+    ? `<div class="g-auto">${people.map(u => `<div class="card">
+        <div class="card-body">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            ${av(u, 'av-md')}
+            <div style="min-width:0">
+              <div style="font-weight:700;font-size:13px">${esc(u.name)}</div>
+              <div style="font-size:11px;color:var(--text-muted)">${esc(u.designation || u.role)}${u.empId ? ' · ' + esc(u.empId) : ''}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+            ${u.department?.name ? `<span class="chip">${esc(u.department.name)}</span>` : ''}
+            ${u.team?.name ? `<span class="chip">${esc(u.team.name)}</span>` : ''}
+          </div>
+          <button class="btn btn-secondary btn-sm btn-full" onclick="dwViewPerson('${u._id}')">${IC.eye} View work updates</button>
+        </div>
+      </div>`).join('')}</div>`
+    : `<div class="card"><div class="card-body"><div class="empty">
+        <div class="empty-icon">${IC.employees}</div>
+        <div class="empty-title">Nobody in ${esc(deptName)}</div>
+        <div class="empty-sub">No active employees are assigned to it yet.</div>
+      </div></div></div>`;
+}
+
+async function dwLoad() {
+  const box = document.getElementById('dwBody');
+  if (!box) return;
+
+  if (DW_MODE === 'people') { dwPeople(); return; }
+
+  const date   = document.getElementById('dw_date')?.value   || '';
+  const user   = document.getElementById('dw_user')?.value   || '';
+  const team   = document.getElementById('dw_team')?.value   || '';
+  const status = document.getElementById('dw_status')?.value || '';
+
+  // submitted=true is the definition of "an update". An assigned task nobody
+  // has touched is a plan, not a report, and listing it here would tell a
+  // manager somebody worked when they did not.
+  let path = '/tasks?limit=200&submitted=true';
+  if (date)    path += '&date='   + date;
+  if (user)    path += '&userId=' + user;
+  if (team)    path += '&team='   + team;
+  if (DW_DEPT) path += '&dept='   + DW_DEPT;
+  if (status)  path += '&status=' + status;
+
+  box.innerHTML = `<div class="card"><div class="card-body"><div class="page-loader"><span class="spin">${IC.spinner}</span>Loading updates…</div></div></div>`;
+
+  try {
+    const { tasks } = await GET(path);
+    const cnt = document.getElementById('dwCount');
+    if (cnt) cnt.textContent = `${tasks.length} update${tasks.length !== 1 ? 's' : ''}`;
+
+    box.innerHTML = tasks.length
+      ? `<div class="card"><div class="table-wrap"><table class="tbl">
+          <thead><tr><th>Employee</th><th>Task</th><th>Work Done</th><th>Status</th><th>Progress</th><th>Hours</th><th>Review</th><th>Actions</th></tr></thead>
+          <tbody>${tasks.map(t => {
+            const late = lateInfo(t);
+            const review = t.approved
+              ? `<span class="badge badge-green">${IC.check} Approved</span>`
+              : t.rejected
+                ? `<span class="badge badge-red">${IC.x} Rejected</span>`
+                : `<span class="badge badge-grey">Pending</span>`;
+            return `<tr class="${late.tier ? `late-${late.tier}` : ''}">
+              <td>${employeeCell(t.userId)}</td>
+              <td style="max-width:170px">${taskTitleCell(t)}</td>
+              <td style="max-width:260px;font-size:12px;color:var(--text-secondary)">${esc((t.description || '').slice(0, 160)) || '—'}${(t.description || '').length > 160 ? '…' : ''}</td>
+              <td>${sbadge(t.status)}</td>
+              <td style="min-width:110px">${pbar(t.completion)}</td>
+              <td style="white-space:nowrap">${Number(t.hours) || 0}h${t.attachmentCount ? ` <span title="${t.attachmentCount} attachment${t.attachmentCount === 1 ? '' : 's'}">${IC.paperclip}</span>` : ''}</td>
+              <td>${review}</td>
+              <td><div class="tbl-actions">
+                <button class="btn btn-secondary btn-xs" onclick="viewTask('${t._id}')" title="View the full update">${IC.eye} View</button>
+                ${['manager','admin','superadmin'].includes(CU.role) && !t.approved && !t.rejected
+                  ? `<button class="btn btn-success btn-xs" onclick="reviewTask('${t._id}')" title="Review this submission">${IC.reviews}</button>` : ''}
+              </div></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div></div>`
+      : `<div class="card"><div class="card-body"><div class="empty">
+          <div class="empty-icon">${IC.calendar}</div>
+          <div class="empty-title">No updates match</div>
+          <div class="empty-sub">Nobody has submitted work against these filters. Try widening the date or clearing a filter.</div>
+        </div></div></div>`;
+
+    refreshTables();
+  } catch (e) {
+    box.innerHTML = `<div class="card"><div class="card-body"><div class="empty">
+      <div class="empty-icon">${IC.alert}</div>
+      <div class="empty-title">Failed to load updates</div>
+      <div class="empty-sub">${esc(e.message)}</div>
+    </div></div></div>`;
+  }
 }
 
 // ═══════════════════════════════════════════════════════
 //  REVIEWS
 // ═══════════════════════════════════════════════════════
+// Set by reviewTask() on the task list so this page can scroll to the card
+// the manager actually clicked.
+let RV_FOCUS = null;
+
 async function rdReviews() {
   const el = document.getElementById('page-reviews');
   pageLoader(el);
   try {
     const { tasks } = await GET('/tasks?limit=200');
-    const pending = tasks.filter(t => !t.approved && !t.rejected && t.status !== 'not-started');
+    // `submittedAt` rather than a status guess. A task can sit at "in progress"
+    // because a manager set it there, with nothing written against it — there
+    // is nothing to review until the employee sends their update, and the
+    // server refuses the review anyway.
+    const pending = tasks.filter(t => !t.approved && !t.rejected && t.submittedAt);
     const done    = tasks.filter(t => t.approved || t.rejected);
 
     el.innerHTML = `
@@ -3262,7 +3639,7 @@ async function rdReviews() {
             </div>`
           : pending.map(t => {
               const u = t.userId;
-              return `<div class="card review-card">
+              return `<div class="card review-card" id="rvcard-${t._id}">
                 <div class="card-header">
                   <div style="display:flex;align-items:center;gap:10px">
                     ${u ? av(u, 'av-md') : ''}
@@ -3275,11 +3652,16 @@ async function rdReviews() {
                 </div>
                 <div class="card-body">
                   <div class="review-meta">
-                    <div class="review-meta-item"><div class="review-meta-label">Hours</div><div class="review-meta-val">${t.hours}h</div></div>
+                    <div class="review-meta-item"><div class="review-meta-label">Hours Logged</div><div class="review-meta-val">${Number(t.hours) || 0}h</div></div>
+                    <div class="review-meta-item"><div class="review-meta-label">Estimated</div><div class="review-meta-val">${Number(t.estimateHours) || 0}h</div></div>
                     <div class="review-meta-item"><div class="review-meta-label">Completion</div><div class="review-meta-val">${t.completion}%</div></div>
                     <div class="review-meta-item"><div class="review-meta-label">Support Needed</div><div class="review-meta-val" style="font-size:12px;font-weight:500">${t.support || 'No'}</div></div>
                   </div>
+                  <div class="profile-field-label" style="margin-bottom:4px">Work Done</div>
                   <div class="review-desc">${t.description || t.desc || 'No description provided.'}</div>
+                  ${t.attachmentCount ? `<div style="margin:0 0 10px">
+                    <button class="btn btn-secondary btn-xs" onclick="viewTask('${t._id}')">${IC.paperclip} ${t.attachmentCount} attachment${t.attachmentCount === 1 ? '' : 's'} — open update</button>
+                  </div>` : ''}
                   ${t.challenges ? `<div class="review-challenge">${IC.alert}<span>${t.challenges}</span></div>` : ''}
                   ${t.mgComment ? `<div style="padding:10px;background:var(--warn-wash);border-radius:var(--radius);border-left:3px solid var(--warn);font-size:12px;color:var(--text-primary);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span><strong>Prior comment:</strong> ${t.mgComment}</span><button class="btn btn-xs" style="background:var(--red-wash);color:var(--red-ink);flex-shrink:0" onclick="clearReview('${t._id}')" title="Delete this comment">${IC.trash} Clear</button></div>` : ''}
                   <div class="form-group">
@@ -3325,6 +3707,17 @@ async function rdReviews() {
               </table>
             </div></div>`}
       </div>`;
+    // Arrived here from a Review button on a task row — take the manager to
+    // the card they clicked rather than to the top of a queue of forty.
+    if (RV_FOCUS) {
+      const card = document.getElementById('rvcard-' + RV_FOCUS);
+      RV_FOCUS = null;
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('review-focus');
+        setTimeout(() => card.classList.remove('review-focus'), 2200);
+      }
+    }
   } catch (e) {
     el.innerHTML = `<div class="empty"><div class="empty-icon">${IC.alert}</div><div class="empty-title">Failed to load reviews</div><div class="empty-sub">${e.message}</div><button class="btn btn-primary" onclick="rdReviews()">${IC.refresh} Retry</button></div>`;
   }
@@ -3649,7 +4042,14 @@ const CR_STATUS = {
 // request holds only a hash, and it has no business on screen regardless.
 function crDetails(r) {
   const rows = [];
-  if (r.entity === 'user' && r.action === 'create') {
+
+  // Requests raised since the snapshot went in carry their own resolved
+  // label/value pairs — the department's name, the manager's name — because
+  // the CEO cannot judge a team whose manager reads as an ObjectId. Older
+  // requests have no `details` and fall through to the payload below.
+  if (Array.isArray(r.details) && r.details.length) {
+    r.details.forEach(d => rows.push([d.label, d.value]));
+  } else if (r.entity === 'user' && r.action === 'create') {
     const p = r.payload || {};
     rows.push(['Employee ID', p.empId], ['Username', p.username],
               ['Role', p.role || 'employee'], ['Designation', p.designation]);
@@ -3830,40 +4230,63 @@ async function rdTeams() {
 }
 
 async function addTeamModal() {
-  let depts = []; let managers = [];
+  let depts = []; let managers = []; let staff = [];
   try { const r = await GET('/departments'); depts = r.departments; } catch(e) {}
   try { const r = await GET('/users?role=manager'); managers = r.users; } catch(e) {}
+  try {
+    const r = await GET('/users?active=true');
+    staff = r.users.filter(u => ['employee', 'manager'].includes(u.role));
+  } catch(e) {}
+
+  // Members are chosen here rather than after approval on purpose. This form
+  // is a proposal to the CEO, and "add a team" is not a decision he can make
+  // without knowing who is in it — an empty shell tells him nothing about
+  // whether the team should exist.
   openModal('Create New Team', `
     <div class="form-group"><label class="form-label">Team Name <span style="color:var(--red-ink)">*</span></label><input class="form-input" id="nt_name" placeholder="e.g. Frontend Team"></div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Department</label>
-        <select class="form-select" id="nt_dept">${depts.map(d => `<option value="${d._id}">${d.name}</option>`).join('')}</select>
+      <div class="form-group"><label class="form-label">Department <span style="color:var(--red-ink)">*</span></label>
+        <select class="form-select" id="nt_dept">${depts.map(d => `<option value="${d._id}">${esc(d.name)}</option>`).join('')}</select>
       </div>
       <div class="form-group"><label class="form-label">Team Manager</label>
         <select class="form-select" id="nt_mgr">
           <option value="">Select manager…</option>
-          ${managers.map(u => `<option value="${u._id}">${u.name}</option>`).join('')}
+          ${managers.map(u => `<option value="${u._id}">${esc(u.name)}</option>`).join('')}
         </select>
       </div>
     </div>
+    <div class="form-group">
+      <label class="form-label">Members</label>
+      ${staff.length
+        ? `<select class="form-select" id="nt_members" multiple size="${Math.min(staff.length, 7)}" style="height:auto;padding:6px">
+             ${staff.map(u => `<option value="${u._id}">${esc(u.name)} — ${esc(u.designation || u.role)}</option>`).join('')}
+           </select>
+           <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+             Ctrl/Cmd-click to pick more than one. The CEO sees this list on the approval.
+           </div>`
+        : `<div style="font-size:12px;color:var(--text-muted)">No selectable staff found.</div>`}
+    </div>
   `, [
     { label: 'Cancel', cls: 'btn-secondary', fn: closeModal },
-    { label: 'Create Team', cls: 'btn-primary', fn: async () => {
+    { label: 'Send for Approval', cls: 'btn-primary', fn: async () => {
         const name = document.getElementById('nt_name').value.trim();
         if (!name) { toast('Name required', 'Please enter a team name.', 'error'); return; }
         if (!document.getElementById('nt_dept').value) { toast('Department required', 'Add a department first, then select one here.', 'error'); return; }
+        const memSel = document.getElementById('nt_members');
+        const members = memSel ? [...memSel.selectedOptions].map(o => o.value) : [];
         try {
           const r = await POST('/teams', {
             name,
             department: document.getElementById('nt_dept').value,
             manager: document.getElementById('nt_mgr').value || undefined,
+            members,
           });
           closeModal();
           reportChange(r, 'Team created', `${name} has been created.`);
           rdTeams();
         } catch (e) { toast('Failed', e.message, 'error'); }
     }},
-  ]);
+  ], true);
 }
 
 async function editTeamModal(id) {
@@ -4592,23 +5015,31 @@ function fileRow(f, { showDelete, after, context }) {
 }
 
 // ── Files section inside the task modal ────────────────────────────────
-async function loadTaskFiles(taskId) {
+// `readOnly` drives whether the upload control appears. Task details is a
+// viewing surface now: files arrive with the daily update they belong to, so
+// the attachment always has the work it documents sitting next to it. A file
+// dropped onto a task days later had no such context and no reviewer saw it.
+async function loadTaskFiles(taskId, { readOnly = false } = {}) {
   const box = document.getElementById('taskFilesBox');
   if (!box) return;
   const cfg = await fileConfig();
 
   try {
     const { files } = await GET('/attachments/task/' + taskId);
-    box.innerHTML = `
-      ${files.length
-        ? files.map(f => fileRow(f, { showDelete: true, after: `() => loadTaskFiles('${taskId}')` })).join('')
-        : '<div class="file-empty">No files attached yet.</div>'}
-      ${cfg.enabled ? `
+    const uploader = readOnly
+      ? `<div class="file-hint" style="margin-top:8px">Attach files when you submit your daily update.</div>`
+      : cfg.enabled ? `
         <div class="file-upload-row">
           <input type="file" id="taskFileInput" class="file-input" accept="${cfg.allowedTypes.join(',')}">
           <button class="btn btn-secondary btn-sm" onclick="uploadTaskFile('${taskId}')">${IC.paperclip} Attach file</button>
           <span class="file-hint" id="taskFileHint">Max ${cfg.maxMb} MB · ${cfg.allowedExts}</span>
-        </div>` : '<div class="file-empty">File storage is not configured on this server.</div>'}`;
+        </div>` : '<div class="file-empty">File storage is not configured on this server.</div>';
+
+    box.innerHTML = `
+      ${files.length
+        ? files.map(f => fileRow(f, { showDelete: !readOnly, after: `() => loadTaskFiles('${taskId}')` })).join('')
+        : '<div class="file-empty">No files attached.</div>'}
+      ${uploader}`;
   } catch (e) {
     box.innerHTML = `<div class="file-empty">Could not load files: ${esc(e.message)}</div>`;
   }
@@ -4742,13 +5173,15 @@ async function buildComposer() {
   const cfg = await fileConfig();
   const box = document.getElementById('fileComposer');
 
-  // Employees can only see the user list through this endpoint if their role
-  // allows it; when it does not, they can still send to their own manager,
-  // which the server resolves. Fall back rather than showing an error.
+  // The server decides who is reachable — an employee's manager, HR and the
+  // CEO/Director; more for senior roles. Deliberately not GET /users, which
+  // employees are not authorised to call at all: the old picker caught that
+  // 403 and fell back to an empty list, so the people this feature exists for
+  // were the only ones who could not use it.
   let people = [];
   try {
-    const { users } = await GET('/users?active=true');
-    people = users.filter(u => u._id !== CU._id);
+    const { users } = await GET('/attachments/recipients');
+    people = users;
   } catch (e) { people = []; }
 
   box.innerHTML = `
@@ -4764,7 +5197,7 @@ async function buildComposer() {
              </div>
              <div class="picker-menu" id="fsMenu" role="listbox"></div>
            </div>
-           <div class="file-hint" style="margin-top:5px">Pick one, or keep going to add more.</div>`
+           <div class="file-hint" style="margin-top:5px">Your manager, HR and the CEO/Director. Pick one, or keep going to add more.</div>`
         : `<div class="file-empty">No recipients available to you.</div>`}
     </div>
     <div class="form-group">

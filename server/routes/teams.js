@@ -35,13 +35,44 @@ router.post('/', protect, authorize('hr', 'admin', 'superadmin'), async (req, re
     if (!req.body.department) {
       return res.status(400).json({ success: false, message: 'A department is required to create a team.' });
     }
-    if (!await Department.exists({ _id: req.body.department })) {
+    const dept = await Department.findById(req.body.department).select('name');
+    if (!dept) {
       return res.status(400).json({ success: false, message: 'That department does not exist.' });
     }
 
+    // The CEO decides on this request, possibly days from now, and he cannot
+    // judge a team whose manager and members read as ObjectIds. Resolve the
+    // names here — the last point at which the documents are in hand — and
+    // store them on the request next to the payload.
+    let manager = null;
+    if (req.body.manager) {
+      manager = await User.findById(req.body.manager).select('name empId');
+      if (!manager) {
+        return res.status(400).json({ success: false, message: 'That manager could not be found.' });
+      }
+    }
+
+    const memberIds = Array.isArray(req.body.members) ? req.body.members.filter(Boolean) : [];
+    const members = memberIds.length
+      ? await User.find({ _id: { $in: memberIds } }).select('name empId')
+      : [];
+    if (members.length !== memberIds.length) {
+      return res.status(400).json({ success: false, message: 'One or more of those members could not be found.' });
+    }
+
     const request = await submitRequest(req, {
-      entity: 'team', action: 'create', payload: req.body,
-      summary: `Add team "${req.body.name}"`,
+      entity: 'team', action: 'create',
+      payload: { ...req.body, members: members.map(m => m._id) },
+      summary: `Add team "${req.body.name}" in ${dept.name}`,
+      details: [
+        { label: 'Team',       value: req.body.name },
+        { label: 'Department', value: dept.name },
+        { label: 'Manager',    value: manager ? `${manager.name} (${manager.empId})` : 'None assigned' },
+        {
+          label: members.length === 1 ? 'Member' : 'Members',
+          value: members.length ? members.map(m => m.name).join(', ') : 'None yet',
+        },
+      ],
     });
 
     return pendingResponse(res, request, `The team will be created`);

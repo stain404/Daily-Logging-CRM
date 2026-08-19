@@ -4,7 +4,8 @@ const Task    = require('../models/Task');
 const Team    = require('../models/Team');
 const Audit   = require('../models/Audit');
 const { protect, authorize } = require('../middleware/auth');
-const { taskAssigned, taskSubmitted, taskReviewed } = require('../services/notify');
+const User    = require('../models/User');
+const { taskAssigned, taskSubmitted, taskReviewed, dailyUpdateSubmitted } = require('../services/notify');
 const { orgToday, orgDaysAgo, orgTimeToDate } = require('../utils/orgTime');
 
 // ── Helper: is this task past its deadline right now? ────────────────
@@ -37,6 +38,7 @@ router.get('/', protect, async (req, res) => {
   try {
     const {
       status, priority, date, userId,
+      team, dept, submitted,
       from, to,
       page  = 1,
       limit = 50,
@@ -60,6 +62,42 @@ router.get('/', protect, async (req, res) => {
     if (userId && ['admin', 'superadmin', 'manager'].includes(req.user.role)) {
       query.userId = userId;
     }
+
+    // Team and department are filters over *people*, so they resolve to a set
+    // of user ids and then intersect with whatever the role query already
+    // allows. Intersecting rather than replacing matters: a manager filtering
+    // by department must still only see their own team, not the department.
+    if (team || dept) {
+      const peopleQuery = {};
+      if (dept) peopleQuery.department = dept;
+      if (team) peopleQuery.team = team;
+      const people = await User.find(peopleQuery).select('_id');
+      let ids = people.map(u => u._id.toString());
+
+      // Team membership is also held on the Team document, and the two are
+      // set independently in this codebase — so check both or a filter can
+      // come back empty for a team that plainly has members.
+      if (team) {
+        const teamDoc = await Team.findById(team).select('members');
+        (teamDoc?.members || []).forEach(m => ids.push(m.toString()));
+      }
+      ids = [...new Set(ids)];
+
+      if (query.userId && query.userId.$in) {
+        const allowed = new Set(query.userId.$in.map(String));
+        query.userId = { $in: ids.filter(id => allowed.has(id)) };
+      } else if (query.userId) {
+        query.userId = ids.includes(query.userId.toString()) ? query.userId : { $in: [] };
+      } else {
+        query.userId = { $in: ids };
+      }
+    }
+
+    // Only entries an employee has actually reported work against. This is
+    // what the review queue and the daily-work view are made of — an assigned
+    // task nobody has touched yet is not an update.
+    if (submitted === 'true')  query.submittedAt = { $ne: null };
+    if (submitted === 'false') query.submittedAt = null;
 
     const total = await Task.countDocuments(query);
     const tasks = await Task.find(query)
@@ -122,14 +160,10 @@ router.post('/', protect, async (req, res) => {
   try {
     const todayStr = orgToday();
 
-    // One submission per employee per day
-    const existing = await Task.findOne({ userId: req.user._id, date: todayStr });
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: "You have already submitted a daily update today. Use the edit option to update it.",
-      });
-    }
+    // Deliberately no one-per-day guard. People genuinely work on several
+    // things in a day, and forcing them into a single row meant the second
+    // task either went unlogged or got appended to the first one's
+    // description, where no report could ever count it.
 
     // Self-submitted updates always start unreviewed — approval/rating fields
     // can only be set later by a manager/admin via the review endpoint.
@@ -170,7 +204,7 @@ router.post('/', protect, async (req, res) => {
 // A manager (or admin/superadmin) assigns a task to a specific team member.
 router.post('/assign', protect, authorize('manager', 'admin', 'superadmin'), async (req, res) => {
   try {
-    const { userId, date, title, description, project, priority, hours, dueDate } = req.body;
+    const { userId, date, title, description, project, priority, hours, estimateHours, dueDate } = req.body;
 
     if (!userId || !title || !project) {
       return res.status(400).json({ success: false, message: 'userId, title, and project are required.' });
@@ -187,16 +221,18 @@ router.post('/assign', protect, authorize('manager', 'admin', 'superadmin'), asy
 
     const targetDate = date || orgToday();
 
-    const existing = await Task.findOne({ userId, date: targetDate });
-    if (existing) {
-      return res.status(400).json({ success: false, message: 'This employee already has a task entry for that date.' });
-    }
+    // A manager can hand someone several tasks for the same day — that is the
+    // normal shape of a workload, and the previous one-per-day rule made the
+    // second assignment fail with an error that read like a bug.
 
     const task = await Task.create({
       userId, date: targetDate, title, project,
       description: description || '',
       priority:    priority    || 'medium',
-      hours:       hours       || 0,
+      // The estimate is the manager's; hours-worked stays the employee's and
+      // starts empty. `hours` is still accepted for older clients.
+      estimateHours: Number(estimateHours ?? hours) || 0,
+      hours:         0,
       // Default the deadline to end of the working day the task covers, so
       // every assigned task has a real dueDate even if the form omits one.
       // 17:00 means 17:00 in the office, not 17:00 UTC.
@@ -221,6 +257,151 @@ router.post('/assign', protect, authorize('manager', 'admin', 'superadmin'), asy
       .populate('assignedBy', 'name');
 
     res.status(201).json({ success: true, task: populated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── POST /api/tasks/daily-update ──────────────────────────────────────
+// The one route by which an employee reports work. It carries a whole day's
+// update — several entries at once — because that is how a day actually looks:
+// some progress on two assigned tasks, plus something the employee picked up
+// themselves that no manager knew to assign.
+//
+// Each entry is either:
+//   • { taskId, ... }  progress against an existing task (assigned, or a
+//                      self-initiated one already created earlier today), or
+//   • { title, project, ... }  a new self-initiated entry.
+//
+// Everything is validated before anything is written. A partially-saved update
+// is worse than a rejected one — the employee would have no way to tell which
+// rows landed, and would re-submit the lot.
+router.post('/daily-update', protect, async (req, res) => {
+  try {
+    const { entries } = req.body;
+
+    if (!Array.isArray(entries) || !entries.length) {
+      return res.status(400).json({ success: false, message: 'Add at least one task to your update.' });
+    }
+    if (entries.length > 20) {
+      return res.status(400).json({ success: false, message: 'A single daily update can hold at most 20 tasks.' });
+    }
+
+    const dateStr = orgToday();
+    const STATUSES = ['completed', 'in-progress', 'not-started', 'delayed', 'on-hold'];
+    const PRIORITIES = ['low', 'medium', 'high', 'critical'];
+
+    // ── Pass 1: validate and resolve, writing nothing ──────────────────
+    const plan = [];
+
+    for (let i = 0; i < entries.length; i++) {
+      const e   = entries[i];
+      const pos = 'Task ' + (i + 1);
+
+      if (!STATUSES.includes(e.status)) {
+        return res.status(400).json({ success: false, message: pos + ': choose a status.' });
+      }
+
+      const hours = Number(e.hours);
+      if (!isFinite(hours) || hours < 0 || hours > 24) {
+        return res.status(400).json({ success: false, message: pos + ': hours worked must be between 0 and 24.' });
+      }
+
+      const completion = Math.max(0, Math.min(100, Number(e.completion) || 0));
+
+      const fields = {
+        description: (e.description || '').trim(),
+        status:      e.status,
+        hours,
+        completion,
+        challenges:  (e.challenges || '').trim(),
+        support:     (e.support || '').trim() || 'No',
+      };
+
+      if (e.taskId) {
+        const task = await Task.findById(e.taskId);
+        if (!task) {
+          return res.status(404).json({ success: false, message: pos + ': that task no longer exists.' });
+        }
+        if (task.userId.toString() !== req.user._id.toString()) {
+          return res.status(403).json({ success: false, message: pos + ': that task is not yours to report on.' });
+        }
+        plan.push({ kind: 'update', task, fields });
+      } else {
+        const title   = (e.title || '').trim();
+        const project = (e.project || '').trim();
+        if (!title) {
+          return res.status(400).json({ success: false, message: pos + ': give the work a title.' });
+        }
+        plan.push({
+          kind: 'create',
+          fields: {
+            ...fields,
+            title,
+            // Self-initiated work often has no project attached to it, and
+            // making someone invent one is exactly the friction this option
+            // exists to remove.
+            project:  project || 'Self-Initiated',
+            priority: PRIORITIES.includes(e.priority) ? e.priority : 'medium',
+            userId:   req.user._id,
+            date:     dateStr,
+            selfInitiated: true,
+            submittedAt:   new Date(),
+          },
+        });
+      }
+    }
+
+    // ── Pass 2: write ──────────────────────────────────────────────────
+    const savedTasks = [];
+    const firstTime  = [];   // entries that became a submission just now
+
+    for (const item of plan) {
+      if (item.kind === 'create') {
+        const task = await Task.create(item.fields);
+        savedTasks.push(task);
+        firstTime.push(task);
+        continue;
+      }
+
+      const { task, fields } = item;
+      const isFirstSubmission = !task.submittedAt;
+      Object.assign(task, fields);
+      if (isFirstSubmission) task.submittedAt = new Date();
+      await task.save();
+      savedTasks.push(task);
+      if (isFirstSubmission) firstTime.push(task);
+    }
+
+    await Audit.create({
+      user:     req.user._id,
+      userName: req.user.name,
+      action:   'Daily Update Submitted',
+      detail:   'Submitted a daily update covering ' + savedTasks.length +
+                ' task' + (savedTasks.length === 1 ? '' : 's'),
+      ip:       req.ip,
+    });
+
+    // One notification for the whole update rather than one per entry. A
+    // manager with six people on a busy day would otherwise get twenty bells
+    // for what is really six events. Not awaited — notify() swallows its own
+    // errors and must never fail a submission.
+    if (firstTime.length) {
+      dailyUpdateSubmitted(req.user._id, req.user.name, firstTime, {
+        late: firstTime.some(t => isLate(t, t.submittedAt)),
+      });
+    }
+
+    const order = savedTasks.map(t => t._id.toString());
+    const populated = (await Task.find({ _id: { $in: savedTasks.map(t => t._id) } })
+      .populate('userId',     'name empId color initials designation')
+      .populate('assignedBy', 'name'))
+      // Returned in the order the client sent them. It matches each saved task
+      // back to the row it came from so it can upload that row's attachments,
+      // and $in gives no ordering guarantee at all.
+      .sort((a, b) => order.indexOf(a._id.toString()) - order.indexOf(b._id.toString()));
+
+    res.status(201).json({ success: true, count: populated.length, tasks: populated });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -303,6 +484,16 @@ router.put('/:id/review', protect, authorize('manager', 'admin', 'superadmin'), 
     const task = await Task.findById(req.params.id);
     if (!task) {
       return res.status(404).json({ success: false, message: 'Task not found.' });
+    }
+
+    // Nothing is reviewable until the employee has reported against it.
+    // Approving an untouched assignment used to be one click away in the task
+    // list, which quietly marked work done that nobody had started.
+    if (!task.submittedAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'This task has not been submitted yet. It can be reviewed once the employee sends their daily update.',
+      });
     }
 
     if (action === 'approve') {

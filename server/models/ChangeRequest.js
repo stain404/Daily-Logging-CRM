@@ -39,6 +39,17 @@ const ChangeRequestSchema = new mongoose.Schema({
   // an approved deletion would otherwise show a blank row.
   targetLabel: { type: String, default: '' },
 
+  // Label/value pairs resolved at request time — the department's name rather
+  // than its id, the manager's name rather than a ref. The CEO has to judge a
+  // request on what it says, and he cannot approve a team whose manager shows
+  // as an ObjectId. Snapshotted for the same reason as targetLabel: the rows
+  // it points at can move before he decides.
+  details: [{
+    _id:   false,
+    label: { type: String, default: '' },
+    value: { type: String, default: '' },
+  }],
+
   // One line describing the whole request, also built at request time. Same
   // reason: the list must stay readable without re-resolving anything.
   summary: { type: String, required: true, trim: true },

@@ -146,6 +146,34 @@ function taskSubmitted({ task, submittedByName, submittedAt, url, late }) {
   });
 }
 
+// A whole daily update → the reviewers who oversee the submitter.
+// One email for the day rather than one per task: a six-person team on a
+// normal day would otherwise send a reviewer twenty near-identical messages,
+// and the useful signal (who reported, how much, was any of it late) is the
+// same in all of them.
+function dailyUpdate({ submittedByName, tasks, submittedAt, url, late }) {
+  const n     = tasks.length;
+  const plural = n === 1 ? 'task' : 'tasks';
+  const titles = tasks.map(t => t.title).filter(Boolean);
+
+  return build({
+    subject: late
+      ? `Late daily update from ${submittedByName}`
+      : `Daily update from ${submittedByName} (${n} ${plural})`,
+    heading: late ? 'A daily update arrived late' : 'A daily update is ready for review',
+    introLine: `${submittedByName} reported work on ${n} ${plural}${late ? ', after the deadline' : ''}.`,
+    rows: [
+      { label: 'Submitted by', value: submittedByName },
+      { label: 'Submitted at', value: fmtDate(submittedAt) },
+      { label: n === 1 ? 'Task' : 'Tasks', value: titles.join(' · ') },
+      { label: 'Hours logged', value: String(tasks.reduce((sum, t) => sum + (Number(t.hours) || 0), 0)) },
+    ],
+    ctaLabel: 'Open reviews',
+    ctaUrl:   url,
+    footerNote: `You are receiving this because you oversee this person in ${BRAND.name}. Submission alerts cannot be switched off for reviewers.`,
+  });
+}
+
 // Task reviewed → the task owner.
 function taskReviewed({ task, reviewerName, action, url }) {
   const verb = action === 'approve' ? 'approved'
@@ -171,4 +199,4 @@ function taskReviewed({ task, reviewerName, action, url }) {
   });
 }
 
-module.exports = { taskAssigned, taskSubmitted, taskReviewed, BRAND, esc, fmtDate };
+module.exports = { taskAssigned, taskSubmitted, taskReviewed, dailyUpdate, BRAND, esc, fmtDate };

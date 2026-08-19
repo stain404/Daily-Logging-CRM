@@ -3,6 +3,7 @@ const router     = express.Router();
 const Attachment = require('../models/Attachment');
 const Task       = require('../models/Task');
 const User       = require('../models/User');
+const Team       = require('../models/Team');
 const Audit      = require('../models/Audit');
 const storage    = require('../services/storage');
 const { fileShared, supervisorsOf } = require('../services/notify');
@@ -52,6 +53,66 @@ async function canAccess(user, att) {
   }
   return false;
 }
+
+// ── Who may this person send a file to? ──────────────────────────────
+// A direct send is addressed to a named human, so the picker is not a
+// company-wide directory. An employee's business is with their own manager,
+// with HR, and with the CEO — not with the other 200 people on the payroll,
+// and a free-text search over all of them is how a payslip ends up with the
+// wrong Ahmed.
+//
+// Seniority widens it rather than removing it: a manager can also reach their
+// own reports, and HR/admin/the CEO can reach everyone, because that is
+// already true of every other screen they have.
+async function allowedRecipients(user) {
+  const wide = ['hr', 'admin', 'superadmin'].includes(user.role);
+
+  if (wide) {
+    return User.find({ active: true, _id: { $ne: user._id } })
+      .select('name empId designation role color initials')
+      .sort({ name: 1 });
+  }
+
+  const ids = new Set();
+
+  // Their own review chain — the direct manager link and the team one, which
+  // are set independently here and are not always both present.
+  (await supervisorsOf(user._id)).forEach(id => ids.add(id.toString()));
+
+  // A manager can also send down to the people they oversee.
+  if (user.role === 'manager') {
+    const teams = await Team.find({ manager: user._id }).select('members');
+    teams.forEach(t => (t.members || []).forEach(m => ids.add(m.toString())));
+  }
+
+  const reachable = await User.find({
+    active: true,
+    $or: [
+      { _id: { $in: [...ids] } },
+      // HR and the CEO/Director are addressable by everyone by role, not by
+      // reporting line — that is the whole point of being able to reach them.
+      { role: { $in: ['hr', 'superadmin'] } },
+    ],
+  })
+    .select('name empId designation role color initials')
+    .sort({ name: 1 });
+
+  return reachable.filter(u => u._id.toString() !== user._id.toString());
+}
+
+// ── GET /api/attachments/recipients ───────────────────────────────────
+// The picker's source of truth. Deliberately its own endpoint rather than the
+// client filtering GET /api/users: employees are not authorised to call that
+// at all, so the old picker silently fell back to an empty list for exactly
+// the people this feature is for.
+router.get('/recipients', protect, async (req, res) => {
+  try {
+    const users = await allowedRecipients(req.user);
+    res.json({ success: true, count: users.length, users });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // ── GET /api/attachments/config ───────────────────────────────────────
 // Lets the client render limits and the accept="" filter from the server's
@@ -106,11 +167,16 @@ router.post('/upload-url', protect, requireStorage, async (req, res) => {
       if (!recipientIds.length) {
         return res.status(400).json({ success: false, message: 'Select at least one recipient.' });
       }
-      // Recipients must be real, active users. Anything else is a client bug
-      // or someone probing with invented ids.
-      const found = await User.find({ _id: { $in: recipientIds }, active: true }).select('_id');
-      if (found.length !== recipientIds.length) {
-        return res.status(400).json({ success: false, message: 'One or more recipients could not be found.' });
+      // Recipients must be real, active, and someone this sender is actually
+      // allowed to reach. Checked here and not only in the picker — the picker
+      // is a convenience, this is the rule.
+      const allowed = new Set((await allowedRecipients(req.user)).map(u => u._id.toString()));
+      const outside = recipientIds.filter(id => !allowed.has(String(id)));
+      if (outside.length) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only send files to your manager, HR, or the CEO/Director.',
+        });
       }
     }
 

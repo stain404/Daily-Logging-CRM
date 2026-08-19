@@ -48,10 +48,14 @@ function denyAddRemove(req, res, what) {
 
 // ── Raise a request ───────────────────────────────────────────────────
 // Called by the routes in place of the mutation they used to perform.
-async function submitRequest(req, { entity, action, payload = {}, target, targetLabel, summary }) {
+async function submitRequest(req, { entity, action, payload = {}, target, targetLabel, summary, details = [] }) {
   const doc = await ChangeRequest.create({
     entity, action, payload, target,
     targetLabel: targetLabel || '',
+    // Resolved by the caller — the only place that still holds the department
+    // and manager documents. Blank values are dropped so the CEO's card never
+    // carries an empty row.
+    details: (details || []).filter(d => d && d.label && d.value),
     summary,
     requestedBy:     req.user._id,
     requestedByName: req.user.name,
@@ -152,6 +156,12 @@ async function applyRequest(doc) {
         throw new Error('That department was deleted while this request was waiting.');
       }
       const team = await Team.create(payload);
+      // Membership lives in two places — Team.members and User.team — and both
+      // are read independently elsewhere. Setting only the first produces a
+      // team with members whose members claim to have no team.
+      if (team.members?.length) {
+        await User.updateMany({ _id: { $in: team.members } }, { team: team._id });
+      }
       return { resultId: team._id, detail: `Created team: ${team.name}` };
     }
     const team = await Team.findByIdAndDelete(target);

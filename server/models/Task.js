@@ -29,7 +29,22 @@ const TaskSchema = new mongoose.Schema({
   // Stamped the first time an employee actually submits work against the
   // task, so lateness is measured against the submission, not the last edit.
   submittedAt: { type: Date },
+  // Hours the employee actually worked on this entry, on this day. Capped at
+  // 24 because it describes one day's work — a task that runs longer is
+  // logged across several daily updates.
   hours:      { type: Number, default: 0, min: 0, max: 24 },
+
+  // The manager's estimate of how long the whole task will take, set when it
+  // is assigned. Deliberately uncapped: a task can legitimately run for days,
+  // and this is a total-effort figure, not a one-day figure. Kept separate
+  // from `hours` so the employee's actual no longer overwrites the estimate
+  // and the two can be compared. Reports still roll up `hours`.
+  estimateHours: { type: Number, default: 0, min: 0 },
+
+  // An employee logged this themselves rather than a manager assigning it —
+  // the 'Other / Self-Initiated Task' option on the daily update. Distinct
+  // from merely having no assignedBy, which is also true of legacy rows.
+  selfInitiated: { type: Boolean, default: false },
   completion: { type: Number, default: 0, min: 0, max: 100 },
   challenges: { type: String, default: '' },
   support:    { type: String, default: 'No' },

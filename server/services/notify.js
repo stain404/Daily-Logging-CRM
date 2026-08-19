@@ -113,9 +113,17 @@ async function taskAssigned(task, actor, actorName) {
   return markEmailed(docs, emailedIds);
 }
 
-// An employee submitted work. Goes to their supervisors and to the CEO.
+// An employee submitted work. Goes to their supervisors — and to the CEO only
+// when it is late.
+//
+// Routine submissions deliberately stop at the review chain. The CEO was on
+// every one of these, which meant his bell was a running transcript of the
+// whole company's day and the two things he actually had to act on — a missed
+// deadline, a rejection — were indistinguishable from the noise. Escalation,
+// not subscription: see also taskReviewed and dailyUpdateSubmitted.
 async function taskSubmitted(task, actor, actorName, { late = false } = {}) {
-  const [sups, chiefs] = await Promise.all([supervisorsOf(task.userId), ceos()]);
+  const sups   = await supervisorsOf(task.userId);
+  const chiefs = late ? await ceos() : [];
   const recipients = [...sups, ...chiefs];
 
   const inApp = notify(recipients, {
@@ -139,9 +147,11 @@ async function taskSubmitted(task, actor, actorName, { late = false } = {}) {
   return markEmailed(docs, emailedIds);
 }
 
-// A manager reviewed a submission. Goes to the task owner and to the CEO.
+// A manager reviewed a submission. Goes to the task owner — and to the CEO
+// only on a rejection, which is the one review outcome that signals something
+// went wrong rather than something routine finishing normally.
 async function taskReviewed(task, actor, actorName, action) {
-  const chiefs = await ceos();
+  const chiefs = action === 'reject' ? await ceos() : [];
   const severity = action === 'approve' ? 'success'
                  : action === 'reject'  ? 'danger'
                  : 'info';
@@ -160,14 +170,57 @@ async function taskReviewed(task, actor, actorName, action) {
     severity,
   });
 
-  // Only the task owner is emailed, though the in-app fan-out also reaches the
-  // CEO. Emailing every superadmin on every individual review turns the CEO's
-  // inbox into a firehose within a week; they still get the in-app record.
+  // Only the task owner is emailed. Emailing every superadmin on every
+  // individual review turns the CEO's inbox into a firehose within a week;
+  // he gets the in-app record on rejections and nothing on the rest.
   const email = mailer.sendToUsers([task.userId], actor, {
     type: 'reviewed',
     task,
     render: ({ url }) => templates.taskReviewed({
       task, reviewerName: actorName, action, url,
+    }),
+  });
+
+  const [docs, emailedIds] = await Promise.all([inApp, email]);
+  return markEmailed(docs, emailedIds);
+}
+
+// An employee submitted a whole daily update — several tasks at once.
+//
+// Collapsed into a single notification on purpose. The unit the reviewer cares
+// about is "Priya reported today", not each row inside it; fanning one bell
+// per task out to a manager with six reports produces twenty alerts for six
+// events and trains them to ignore the bell entirely.
+//
+// The CEO is included only when the update is late, on the same escalation
+// rule as taskSubmitted.
+async function dailyUpdateSubmitted(userId, userName, tasks, { late = false } = {}) {
+  if (!tasks?.length) return;
+
+  const sups   = await supervisorsOf(userId);
+  const chiefs = late ? await ceos() : [];
+  const recipients = [...sups, ...chiefs];
+
+  const n      = tasks.length;
+  const plural = n === 1 ? 'task' : 'tasks';
+  const submittedAt = new Date();
+
+  const inApp = notify(recipients, {
+    type: 'submitted',
+    title: late ? 'Late daily update' : 'Daily update submitted',
+    message: `${userName} reported work on ${n} ${plural}${late ? ', after the deadline' : ''}.`,
+    // Linked to the first entry so the bell still deep-links somewhere useful.
+    // There is no single task the update belongs to, which is the point.
+    task: tasks[0]._id,
+    actor: userId,
+    severity: late ? 'warning' : 'info',
+  });
+
+  const email = mailer.sendToUsers(recipients, userId, {
+    type: 'submitted',
+    task: tasks[0],
+    render: ({ url }) => templates.dailyUpdate({
+      submittedByName: userName, tasks, submittedAt, url, late,
     }),
   });
 
@@ -200,4 +253,7 @@ async function fileShared(attachment, actor, actorName) {
   });
 }
 
-module.exports = { notify, markEmailed, supervisorsOf, ceos, taskAssigned, taskSubmitted, taskReviewed, fileShared };
+module.exports = {
+  notify, markEmailed, supervisorsOf, ceos,
+  taskAssigned, taskSubmitted, taskReviewed, dailyUpdateSubmitted, fileShared,
+};
