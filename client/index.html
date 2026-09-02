@@ -2307,6 +2307,9 @@ function initApp() {
   sp('dashboard');
   startNotifPolling();
   openDeepLink();
+  // A #reset-tool link that was pasted and loaded (rather than changed in
+  // place) arrives here, once CU exists and the capability can be checked.
+  setTimeout(checkResetHash, 80);
 }
 
 // ── Deep links from email ──────────────────────────────────────────────
@@ -6202,6 +6205,21 @@ function openResetTool() {
   ]);
 }
 
+// Two ways in, because a function-key chord is unreliable on laptops where the
+// F-row needs Fn. Both land in the same capability check, so neither is a way
+// past the server.
+//
+//   1. Add #reset-tool to the URL — e.g. .../#reset-tool — and press Enter.
+//      Works everywhere, bookmarkable. The hash is wiped straight back off so
+//      it does not linger in the address bar or history.
+//   2. Ctrl+Shift+F9, where the F-row is available without Fn.
+function checkResetHash() {
+  if (location.hash.toLowerCase() === '#reset-tool') {
+    history.replaceState(null, '', location.pathname + location.search);
+    openResetTool();
+  }
+}
+window.addEventListener('hashchange', checkResetHash);
 document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.shiftKey && (e.key === 'F9' || e.code === 'F9')) {
     e.preventDefault();
