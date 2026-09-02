@@ -7,6 +7,8 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
+const { repairDnsIfLoopback } = require('../utils/dnsRepair');
+repairDnsIfLoopback();
 
 const NEW_SUPERADMIN = {
   empId:       'SA001',

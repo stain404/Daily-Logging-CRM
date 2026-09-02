@@ -25,6 +25,8 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
+const { repairDnsIfLoopback } = require('../utils/dnsRepair');
+repairDnsIfLoopback();
 
 const APPLY = process.argv.includes('--apply');
 const LIST  = process.argv.includes('--list');

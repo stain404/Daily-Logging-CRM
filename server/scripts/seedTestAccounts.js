@@ -21,6 +21,8 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
+const { repairDnsIfLoopback } = require('../utils/dnsRepair');
+repairDnsIfLoopback();
 
 const { PEOPLE, DEPARTMENT, TEAM_NAME, NOTE, passwordFromArgv } = require('./qaRoster');
 

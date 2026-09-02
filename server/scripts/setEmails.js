@@ -23,6 +23,8 @@ require('dotenv').config();
 const fs   = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
+const { repairDnsIfLoopback } = require('../utils/dnsRepair');
+repairDnsIfLoopback();
 const User = require('../models/User');
 
 const args  = process.argv.slice(2);

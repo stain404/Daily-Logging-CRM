@@ -27,27 +27,10 @@
 // the daily-logging-crm service), same as resetPassword.js.
 
 require('dotenv').config();
-const dns      = require('dns');
 const mongoose = require('mongoose');
+const { repairDnsIfLoopback } = require('../utils/dnsRepair');
 
 const APPLY = process.argv.includes('--apply');
-
-// Node on this machine resolves DNS through 127.0.0.1, and nothing is
-// listening there, so every `mongodb+srv://` URI dies with
-// `querySrv ECONNREFUSED` before a packet reaches Atlas. Windows' own resolver
-// is healthy — nslookup on the same hostname works — which makes this look
-// like an Atlas outage or a firewall when it is neither.
-//
-// Only override when every configured server is loopback: on a machine with
-// working DNS this is a no-op, and on a corporate network the local resolver
-// may be the only one that can see internal hosts.
-function repairDnsIfLoopback() {
-  const servers = dns.getServers();
-  const allLoopback = servers.every(s => s === '127.0.0.1' || s === '::1' || s.startsWith('127.'));
-  if (!allLoopback) return null;
-  dns.setServers(['1.1.1.1', '8.8.8.8']);
-  return servers;
-}
 
 (async () => {
   const uri = process.env.MONGODB_URI;
@@ -56,11 +39,7 @@ function repairDnsIfLoopback() {
     process.exit(1);
   }
 
-  const repaired = repairDnsIfLoopback();
-  if (repaired) {
-    console.log(`\n  note      DNS was set to ${repaired.join(', ')}, which refuses connections.`);
-    console.log('            Using 1.1.1.1 / 8.8.8.8 for this run only.');
-  }
+  repairDnsIfLoopback();
 
   await mongoose.connect(uri);
   const db    = mongoose.connection.db;

@@ -27,6 +27,8 @@
 //   * never writes to the source.
 
 const { MongoClient } = require('mongodb');
+const { repairDnsIfLoopback } = require('../utils/dnsRepair');
+repairDnsIfLoopback();
 
 const SAFE_TARGET = /(test|copy|scratch|staging|_clone)/i;
 

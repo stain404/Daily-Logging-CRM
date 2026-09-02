@@ -24,6 +24,8 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
+const { repairDnsIfLoopback } = require('../utils/dnsRepair');
+repairDnsIfLoopback();
 
 const User       = require('../models/User');
 const Team       = require('../models/Team');
