@@ -33,6 +33,18 @@ async function getTaskQuery(user) {
   return { userId: user._id };
 }
 
+// ── Helper: is this task inside the caller's world? ──────────────────
+// getTaskQuery already encodes "whose work may this role see" — admins get
+// everything, a manager gets their own reports, an employee gets themselves.
+// Reuse it rather than restating the rule: run the same filter against a
+// single id and see whether it survives. Without this, `authorize('manager')`
+// was the only gate on the feedback routes, so any manager in the company
+// could comment on, rate, or wipe the feedback of any other manager's team.
+async function inScope(user, taskId) {
+  const query = await getTaskQuery(user);
+  return Boolean(await Task.exists({ _id: taskId, ...query }));
+}
+
 // ── GET /api/tasks ────────────────────────────────────────────────────
 router.get('/', protect, async (req, res) => {
   try {
@@ -480,13 +492,19 @@ router.put('/:id', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'You are not authorised to edit this task.' });
     }
 
-    // Employees (and HR, who submit updates the same way) cannot write their
-    // own manager feedback, nor move their own deadline.
+    // Feedback belongs to the feedback endpoint and is never writable here,
+    // whoever is asking. This used to be stripped for employees and HR only,
+    // which let a manager rate their own daily update: the ownership branch
+    // above admits them as an owner like anybody else, and their role then
+    // walked straight past the filter.
+    delete req.body.mgComment;
+    delete req.body.mgRating;
+    delete req.body.reviewedBy;
+    delete req.body.reviewedAt;
+
+    // Employees (and HR, who submit updates the same way) additionally cannot
+    // move their own deadline or restamp their own submission.
     if (['employee', 'hr'].includes(req.user.role)) {
-      delete req.body.mgComment;
-      delete req.body.mgRating;
-      delete req.body.reviewedBy;
-      delete req.body.reviewedAt;
       delete req.body.assignedBy;
       delete req.body.dueDate;
       delete req.body.submittedAt;
@@ -548,6 +566,10 @@ router.put('/:id/review', protect, authorize('manager', 'admin', 'superadmin'), 
       return res.status(404).json({ success: false, message: 'Task not found.' });
     }
 
+    if (!await inScope(req.user, task._id)) {
+      return res.status(403).json({ success: false, message: "You can only leave feedback on your own team's work." });
+    }
+
     // There is nothing to give feedback on until the employee has reported
     // against the task — an untouched assignment has no work to comment on.
     if (!task.submittedAt) {
@@ -590,6 +612,10 @@ router.put('/:id/clear-review', protect, authorize('manager', 'admin', 'superadm
     const task = await Task.findById(req.params.id);
     if (!task) {
       return res.status(404).json({ success: false, message: 'Task not found.' });
+    }
+
+    if (!await inScope(req.user, task._id)) {
+      return res.status(403).json({ success: false, message: "You can only clear feedback on your own team's work." });
     }
 
     task.mgComment  = '';
