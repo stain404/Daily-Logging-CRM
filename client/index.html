@@ -2241,7 +2241,7 @@ async function doLogin() {
     document.getElementById('loginWrap').style.display = 'none';
     document.getElementById('appWrap').style.display   = 'block';
     initApp();
-    toast('Welcome back', `Signed in as ${CU.name}`, 'success');
+    toast('Welcome back', `Signed in as ${esc(CU.name)}`, 'success');
   } catch (e) {
     showLoginErr(e.message || 'Invalid credentials. Please try again.');
   } finally {
@@ -2705,7 +2705,7 @@ function dashContributors(tasks) {
   return rows.map((r, i) => `<div class="contrib-row">
     <span class="contrib-rank">${String(i + 1).padStart(2, '0')}</span>
     ${av(r.user, 'av-sm')}
-    <span class="contrib-name">${r.user.name || '—'}</span>
+    <span class="contrib-name">${esc(r.user.name || '—')}</span>
     <div class="contrib-bar"><div class="contrib-fill" style="width:${Math.round(r.count / max * 100)}%"></div></div>
     <span class="contrib-val">${r.count}</span>
   </div>`).join('');
@@ -2825,7 +2825,7 @@ async function rdDash() {
     el.innerHTML = `
       <div class="dash-head">
         <div>
-          <div class="dash-greet">Welcome back, ${(CU.name || '').split(' ')[0]}</div>
+          <div class="dash-greet">Welcome back, ${esc((CU.name || '').split(' ')[0])}</div>
           <div class="dash-sub">
             <span class="dash-live">Live</span>
             <span class="dash-dot"></span>
@@ -2846,8 +2846,8 @@ async function rdDash() {
             ${av(eom.user, 'av-md')}
             <div>
               <div style="font-size:11px;font-weight:700;color:var(--accent-ink);text-transform:uppercase;letter-spacing:.5px;font-family:var(--font-mono)">Employee of the Month</div>
-              <div style="font-size:15px;font-weight:800;color:var(--text-primary)">${eom.user.name}</div>
-              <div style="font-size:11px;color:var(--text-muted)">${eom.user.designation || ''}${eom.user.department?.name ? ' · ' + eom.user.department.name : ''}</div>
+              <div style="font-size:15px;font-weight:800;color:var(--text-primary)">${esc(eom.user.name)}</div>
+              <div style="font-size:11px;color:var(--text-muted)">${esc(eom.user.designation || '')}${eom.user.department?.name ? ' · ' + eom.user.department.name : ''}</div>
             </div>
           </div>
           <div style="display:flex;gap:20px;text-align:center">
@@ -3073,7 +3073,7 @@ async function assignTaskModal() {
     <div class="form-row">
       <div class="form-group"><label class="form-label">Assign To <span style="color:var(--red-ink)">*</span></label>
         <select class="form-select" id="at_user">
-          ${members.map(m => `<option value="${m._id}">${m.name}</option>`).join('')}
+          ${members.map(m => `<option value="${m._id}">${esc(m.name)}</option>`).join('')}
         </select>
       </div>
       <div class="form-group"><label class="form-label">Date</label>
@@ -3219,7 +3219,7 @@ async function loadTasks() {
                 ? `<button class="btn btn-primary btn-xs" onclick="submitForTask('${t._id}')" title="Report progress on this task in your daily update">${IC.submit} Submit</button>` : ''}
               ${canReview && t.submittedAt
                 ? `<button class="btn btn-success btn-xs" onclick="reviewTask('${t._id}')" title="Open this submission in Feedback">${IC.reviews} Feedback</button>` : ''}
-              ${canReview ? `<button class="btn btn-danger btn-xs" onclick="deleteTask('${t._id}','${t.title.replace(/'/g,"\\'")}',loadTasks)" title="Delete task">${IC.trash}</button>` : ''}
+              ${canReview ? `<button class="btn btn-danger btn-xs" onclick="deleteTask('${t._id}','${esc(t.title.replace(/'/g,"\\'"))}',loadTasks)" title="Delete task">${IC.trash}</button>` : ''}
             </div></td>
           </tr>`;
         }).join('')
@@ -3248,7 +3248,7 @@ async function viewTask(id) {
       `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
         <div><div class="profile-field-label">Employee</div><div class="profile-field-val">${getName(u)}</div></div>
         <div><div class="profile-field-label">Date</div><div class="profile-field-val">${fmtDate(t.date)}</div></div>
-        <div><div class="profile-field-label">Project</div><div class="profile-field-val">${t.project}</div></div>
+        <div><div class="profile-field-label">Project</div><div class="profile-field-val">${esc(t.project)}</div></div>
         <div><div class="profile-field-label">Status</div><div style="margin-top:2px">${sbadge(t.status)}</div></div>
         <div><div class="profile-field-label">Priority</div><div style="margin-top:2px">${pbadge(t.priority)}</div></div>
         <div><div class="profile-field-label">Estimated</div><div class="profile-field-val">${Number(t.estimateHours) || 0}h</div></div>
@@ -3256,13 +3256,13 @@ async function viewTask(id) {
         <div><div class="profile-field-label">Deadline</div><div class="profile-field-val">${deadlineCell(t)}</div></div>
       </div>
       <div class="profile-field-label">Work Done</div>
-      <div style="padding:10px;background:var(--bg-raised);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6">${t.description || t.desc || 'No description provided.'}</div>
+      <div style="padding:10px;background:var(--bg-raised);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6">${esc(t.description || t.desc || 'No description provided.')}</div>
       <div class="profile-field-label" style="margin-bottom:6px">Completion</div>
       ${pbar(t.completion)}
       <div style="margin-bottom:14px"></div>
-      ${t.challenges ? `<div class="review-challenge">${IC.alert}<span>${t.challenges}</span></div>` : ''}
-      ${t.nextPlan ? `<div style="margin-bottom:12px"><div class="profile-field-label">Next Day Plan</div><div style="font-size:13px;color:var(--text-secondary);margin-top:4px">${t.nextPlan}</div></div>` : ''}
-      ${t.mgComment ? `<div class="feedback-block" style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:center;justify-content:space-between"><div class="feedback-block-label">Manager Feedback</div>${['manager','admin','superadmin'].includes(CU.role) ? `<button class="btn btn-xs" style="background:var(--red-wash);color:var(--red-ink)" onclick="clearReview('${t._id}')" title="Delete this feedback">${IC.trash} Remove</button>` : ''}</div><div class="feedback-block-text">${t.mgComment}</div>${t.mgRating ? `<div>${stars(t.mgRating)}</div>` : ''}</div>` : ''}
+      ${t.challenges ? `<div class="review-challenge">${IC.alert}<span>${esc(t.challenges)}</span></div>` : ''}
+      ${t.nextPlan ? `<div style="margin-bottom:12px"><div class="profile-field-label">Next Day Plan</div><div style="font-size:13px;color:var(--text-secondary);margin-top:4px">${esc(t.nextPlan)}</div></div>` : ''}
+      ${t.mgComment ? `<div class="feedback-block" style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;align-items:center;justify-content:space-between"><div class="feedback-block-label">Manager Feedback</div>${['manager','admin','superadmin'].includes(CU.role) ? `<button class="btn btn-xs" style="background:var(--red-wash);color:var(--red-ink)" onclick="clearReview('${t._id}')" title="Delete this feedback">${IC.trash} Remove</button>` : ''}</div><div class="feedback-block-text">${esc(t.mgComment)}</div>${t.mgRating ? `<div>${stars(t.mgRating)}</div>` : ''}</div>` : ''}
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
         <div class="profile-field-label" style="margin-bottom:2px">Attachments</div>
         <div id="taskFilesBox"><div class="file-empty">Loading files…</div></div>
@@ -3949,8 +3949,8 @@ async function rdReviews() {
                   <div style="display:flex;align-items:center;gap:10px">
                     ${u ? av(u, 'av-md') : ''}
                     <div>
-                      <div style="font-weight:700;font-size:13px">${getName(u)} — ${t.title}</div>
-                      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${t.project} · ${fmtDate(t.date)}</div>
+                      <div style="font-weight:700;font-size:13px">${esc(getName(u))} — ${esc(t.title)}</div>
+                      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(t.project)} · ${fmtDate(t.date)}</div>
                     </div>
                   </div>
                   <div style="display:flex;gap:6px">${sbadge(t.status)}${pbadge(t.priority)}</div>
@@ -3960,12 +3960,12 @@ async function rdReviews() {
                     <div class="review-meta-item"><div class="review-meta-label">Hours Logged</div><div class="review-meta-val">${Number(t.hours) || 0}h</div></div>
                     <div class="review-meta-item"><div class="review-meta-label">Estimated</div><div class="review-meta-val">${Number(t.estimateHours) || 0}h</div></div>
                     <div class="review-meta-item"><div class="review-meta-label">Completion</div><div class="review-meta-val">${t.completion}%</div></div>
-                    <div class="review-meta-item"><div class="review-meta-label">Support Needed</div><div class="review-meta-val" style="font-size:12px;font-weight:500">${t.support || 'No'}</div></div>
+                    <div class="review-meta-item"><div class="review-meta-label">Support Needed</div><div class="review-meta-val" style="font-size:12px;font-weight:500">${esc(t.support || 'No')}</div></div>
                   </div>
                   <div class="profile-field-label" style="margin-bottom:4px">Work Done</div>
-                  <div class="review-desc">${t.description || t.desc || 'No description provided.'}</div>
+                  <div class="review-desc">${esc(t.description || t.desc || 'No description provided.')}</div>
                   ${attachmentStrip(t)}
-                  ${t.challenges ? `<div class="review-challenge">${IC.alert}<span>${t.challenges}</span></div>` : ''}
+                  ${t.challenges ? `<div class="review-challenge">${IC.alert}<span>${esc(t.challenges)}</span></div>` : ''}
                   <div class="form-group">
                     <textarea class="form-textarea" id="rc_${t._id}" placeholder="Write your feedback for this task…"></textarea>
                   </div>
@@ -3975,7 +3975,7 @@ async function rdReviews() {
                       ${[1,2,3,4,5].map(n => `<option value="${n}">${'★'.repeat(n)} ${n}/5</option>`).join('')}
                     </select>
                     <button class="btn btn-primary btn-sm" onclick="reviewAction('${t._id}')">${IC.check} Send Feedback</button>
-                    <button class="btn btn-danger btn-xs"  onclick="deleteTask('${t._id}','${t.title.replace(/'/g,"\\'")}',rdReviews)" title="Permanently delete this task" style="margin-left:auto">${IC.trash} Delete</button>
+                    <button class="btn btn-danger btn-xs"  onclick="deleteTask('${t._id}','${esc(t.title.replace(/'/g,"\\'"))}',rdReviews)" title="Permanently delete this task" style="margin-left:auto">${IC.trash} Delete</button>
                   </div>
                 </div>
               </div>`;
@@ -3996,10 +3996,10 @@ async function rdReviews() {
                     <td style="max-width:200px">${taskTitleCell(t)}</td>
                     <td style="font-size:12px">${getName(t.reviewedBy) || '—'}</td>
                     <td>${t.mgRating ? stars(t.mgRating) : '—'}</td>
-                    <td style="font-size:12px;color:var(--text-muted);max-width:200px">${t.mgComment || '—'}</td>
+                    <td style="font-size:12px;color:var(--text-muted);max-width:200px">${esc(t.mgComment || '—')}</td>
                     <td><div class="tbl-actions">
                       <button class="btn btn-ghost btn-xs" title="Clear feedback (keep task)" onclick="clearReview('${t._id}')" style="color:var(--accent-ink)">${IC.refresh} Clear</button>
-                      <button class="btn btn-danger btn-xs" title="Permanently delete task" onclick="deleteTask('${t._id}','${t.title.replace(/'/g,"\\'")}',rdReviews)">${IC.trash} Delete</button>
+                      <button class="btn btn-danger btn-xs" title="Permanently delete task" onclick="deleteTask('${t._id}','${esc(t.title.replace(/'/g,"\\'"))}',rdReviews)">${IC.trash} Delete</button>
                     </div></td>
                   </tr>`;
                 }).join('')}
@@ -4151,15 +4151,15 @@ async function loadEmpTable() {
             ${av(u, 'av-sm')}
             <div><div style="font-weight:600;font-size:12px">${esc(u.name)}</div><div style="font-size:10px;color:var(--text-muted)">${esc(u.email || u.username || '—')}</div></div>
           </div></td>
-          <td><span class="chip">${u.empId}</span></td>
+          <td><span class="chip">${esc(u.empId)}</span></td>
           <td>${roleBadge(u.role)}</td>
-          <td style="font-size:12px">${u.department?.name || '—'}</td>
-          <td style="font-size:12px">${u.team?.name || '—'}</td>
+          <td style="font-size:12px">${esc(u.department?.name || '—')}</td>
+          <td style="font-size:12px">${esc(u.team?.name || '—')}</td>
           <td>${u.active ? `<span class="badge badge-green">${IC.check} Active</span>` : `<span class="badge badge-red">Inactive</span>`}</td>
           ${showActionsCol ? `<td><div class="tbl-actions">
             ${canEdit ? `<button class="btn btn-secondary btn-xs" onclick="editEmpModal('${u._id}')" title="Edit">${IC.edit}</button>` : ''}
-            ${canEdit ? `<button class="btn btn-secondary btn-xs" onclick="resetPwModal('${u._id}','${u.name.replace(/'/g, "\\'")}')" title="Reset password">${IC.key}</button>` : ''}
-            ${canRemove ? `<button class="btn btn-danger btn-xs"    onclick="confirmDelEmp('${u._id}','${u.name}')" title="Request removal">${IC.trash}</button>` : ''}
+            ${canEdit ? `<button class="btn btn-secondary btn-xs" onclick="resetPwModal('${u._id}','${esc(u.name.replace(/'/g, "\\'"))}')" title="Reset password">${IC.key}</button>` : ''}
+            ${canRemove ? `<button class="btn btn-danger btn-xs"    onclick="confirmDelEmp('${u._id}','${esc(u.name)}')" title="Request removal">${IC.trash}</button>` : ''}
           </div></td>` : ''}
         </tr>`;
         }).join('')
@@ -4196,7 +4196,7 @@ async function addEmpModal() {
     <div class="form-row">
       <div class="form-group"><label class="form-label">Department</label>
         <select class="form-select" id="ne_dept">
-          ${depts.map(d => `<option value="${d._id}">${d.name}</option>`).join('')}
+          ${depts.map(d => `<option value="${d._id}">${esc(d.name)}</option>`).join('')}
         </select>
       </div>
       <div class="form-group"><label class="form-label">Password</label><input class="form-input" type="password" id="ne_pass" value="admin123"></div>
@@ -4236,11 +4236,11 @@ async function editEmpModal(id) {
   try { const r = await GET('/departments'); depts = r.departments; } catch(e) {}
   openModal('Edit Employee', `
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="eu_name" value="${u.name}"></div>
-      <div class="form-group"><label class="form-label">Designation</label><input class="form-input" id="eu_desig" value="${u.designation}"></div>
+      <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="eu_name" value="${esc(u.name)}"></div>
+      <div class="form-group"><label class="form-label">Designation</label><input class="form-input" id="eu_desig" value="${esc(u.designation)}"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="eu_email" value="${u.email}"></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="eu_email" value="${esc(u.email)}"></div>
       <div class="form-group"><label class="form-label">Role</label>
         <select class="form-select" id="eu_role">
           <option value="employee"  ${u.role==='employee'  ?'selected':''}>Employee</option>
@@ -4255,7 +4255,7 @@ async function editEmpModal(id) {
     <div class="form-row">
       <div class="form-group"><label class="form-label">Department</label>
         <select class="form-select" id="eu_dept">
-          ${depts.map(d => `<option value="${d._id}" ${u.department?._id === d._id || u.department === d._id ?'selected':''}>${d.name}</option>`).join('')}
+          ${depts.map(d => `<option value="${d._id}" ${u.department?._id === d._id || u.department === d._id ?'selected':''}>${esc(d.name)}</option>`).join('')}
         </select>
       </div>
       <div class="form-group"><label class="form-label">Status</label>
@@ -4544,12 +4544,12 @@ async function rdTeams() {
               const mgrName = tm.manager?.name || '—';
               const deptName = tm.department?.name || '—';
               const members = Array.isArray(tm.members) ? tm.members : [];
-              const memberStack = members.map(m => `<div title="${m.name}">${av(m,'av-xs')}</div>`).join('');
+              const memberStack = members.map(m => `<div title="${esc(m.name)}">${av(m,'av-xs')}</div>`).join('');
               const canManageMembers = isSA || (CU.role === 'manager' && getId(tm.manager) === myId);
               return `<div class="card">
                 <div class="card-header">
                   <div>
-                    <div class="card-title">${tm.name}</div>
+                    <div class="card-title">${esc(tm.name)}</div>
                     <div class="card-subtitle">${deptName}</div>
                   </div>
                   <span class="badge badge-blue">${members.length} member${members.length !== 1 ? 's' : ''}</span>
@@ -4652,15 +4652,15 @@ async function editTeamModal(id) {
     const r2 = await GET('/users?role=manager'); managers = r2.users;
   } catch(e) { toast('Error', e.message, 'error'); return; }
   openModal('Edit Team', `
-    <div class="form-group"><label class="form-label">Team Name</label><input class="form-input" id="et_name" value="${tm.name}"></div>
+    <div class="form-group"><label class="form-label">Team Name</label><input class="form-input" id="et_name" value="${esc(tm.name)}"></div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Department</label>
-        <select class="form-select" id="et_dept">${depts.map(d => `<option value="${d._id}" ${tm.department?._id===d._id?'selected':''}>${d.name}</option>`).join('')}</select>
+        <select class="form-select" id="et_dept">${depts.map(d => `<option value="${d._id}" ${tm.department?._id===d._id?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
       </div>
       <div class="form-group"><label class="form-label">Manager</label>
         <select class="form-select" id="et_mgr">
           <option value="">No manager</option>
-          ${managers.map(u => `<option value="${u._id}" ${tm.manager?._id===u._id?'selected':''}>${u.name}</option>`).join('')}
+          ${managers.map(u => `<option value="${u._id}" ${tm.manager?._id===u._id?'selected':''}>${esc(u.name)}</option>`).join('')}
         </select>
       </div>
     </div>
@@ -4698,7 +4698,7 @@ async function manageMembersModal(id) {
         ${tm.members.length ? `<div style="display:flex;flex-direction:column;gap:6px">
           ${tm.members.map(m => `<div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius)">
             ${av(m,'av-sm')}
-            <div style="flex:1"><div style="font-weight:600;font-size:12px">${m.name}</div><div style="font-size:10px;color:var(--text-muted)">${m.designation || ''}</div></div>
+            <div style="flex:1"><div style="font-weight:600;font-size:12px">${esc(m.name)}</div><div style="font-size:10px;color:var(--text-muted)">${esc(m.designation || '')}</div></div>
             <button class="btn btn-danger btn-xs" onclick="removeTeamMember('${id}','${m._id}')" title="Remove">${IC.x}</button>
           </div>`).join('')}
         </div>` : `<div style="font-size:12px;color:var(--text-muted)">No members yet.</div>`}
@@ -4762,7 +4762,7 @@ async function rdDepts() {
         ${departments.map(d => `<div class="card dept-card">
           <div class="dept-card-bar" style="background:${d.color}"></div>
           <div class="card-body">
-            <div style="font-size:16px;font-weight:800;color:var(--text-primary);margin-bottom:14px">${d.name}</div>
+            <div style="font-size:16px;font-weight:800;color:var(--text-primary);margin-bottom:14px">${esc(d.name)}</div>
             ${isSA ? `<div style="display:flex;gap:6px;padding-top:12px;border-top:1px solid var(--border)">
               <button class="btn btn-secondary btn-sm" onclick="editDeptModal('${d._id}')">${IC.edit} Edit</button>
             </div>` : ''}
@@ -4803,7 +4803,7 @@ async function editDeptModal(id) {
   let d;
   try { const { departments } = await GET('/departments'); d = departments.find(x => x._id === id); } catch(e) { return; }
   openModal('Edit Department', `
-    <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ed_name" value="${d.name}"></div>
+    <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ed_name" value="${esc(d.name)}"></div>
     <div class="form-group">
       <label class="form-label">Color</label>
       <input type="color" id="ed_color" value="${d.color}" style="width:48px;height:38px;border:1.5px solid var(--border);border-radius:var(--radius);cursor:pointer;padding:2px;margin-top:6px">
@@ -4881,7 +4881,7 @@ async function rdReports() {
             <label class="form-label">Employee</label>
             <select class="form-select" id="rp_user">
               <option value="">All Employees</option>
-              ${people.map(p => `<option value="${p._id}">${p.name}</option>`).join('')}
+              ${people.map(p => `<option value="${p._id}">${esc(p.name)}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -4917,7 +4917,7 @@ async function genReport() {
           <td style="font-weight:700;color:var(--text-muted)">${i + 1}</td>
           <td><div style="display:flex;align-items:center;gap:8px">
             <div class="av av-sm" style="background:linear-gradient(135deg,${r.color || '#2563eb'},#0ea5e9)">${r.initials || '?'}</div>
-            <span style="font-weight:600;font-size:12px">${r.name}</span>
+            <span style="font-weight:600;font-size:12px">${esc(r.name)}</span>
           </div></td>
           <td style="font-size:12px">${r.department || '—'}</td>
           <td style="font-weight:600">${r.total}</td>
@@ -4935,7 +4935,7 @@ async function genReport() {
       <div class="table-wrap"><table class="tbl">
         <thead><tr><th>Team</th><th>Department</th><th>Manager</th><th>Members</th><th>Total Tasks</th><th>Completed</th><th>Completion Rate</th></tr></thead>
         <tbody>${report.map(r => `<tr>
-          <td style="font-weight:700">${r.name}</td>
+          <td style="font-weight:700">${esc(r.name)}</td>
           <td style="font-size:12px">${r.department || '—'}</td>
           <td style="font-size:12px">${r.manager || '—'}</td>
           <td>${r.memberCount}</td>
@@ -4952,7 +4952,7 @@ async function genReport() {
       <div class="table-wrap"><table class="tbl">
         <thead><tr><th>Department</th><th>Members</th><th>Teams</th><th>Total Tasks</th><th>Completed</th><th>Completion Rate</th></tr></thead>
         <tbody>${report.map(r => `<tr>
-          <td><div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:50%;background:${r.color};flex-shrink:0"></div><span style="font-weight:700">${r.name}</span></div></td>
+          <td><div style="display:flex;align-items:center;gap:8px"><div style="width:10px;height:10px;border-radius:50%;background:${r.color};flex-shrink:0"></div><span style="font-weight:700">${esc(r.name)}</span></div></td>
           <td>${r.members}</td>
           <td>${r.teams}</td>
           <td style="font-weight:600">${r.total || 0}</td>
@@ -5044,7 +5044,7 @@ async function rdAudit() {
                     <td style="font-size:11px;white-space:nowrap;color:var(--text-muted)">${new Date(a.createdAt).toLocaleString()}</td>
                     <td style="font-weight:600;font-size:12px">${a.userName || '—'}</td>
                     <td><span class="badge ${actionColor(a.action)}">${a.action}</span></td>
-                    <td style="font-size:12px;color:var(--text-secondary)">${a.detail || '—'}</td>
+                    <td style="font-size:12px;color:var(--text-secondary)">${esc(a.detail || '—')}</td>
                     <td style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${a.ip || '—'}</td>
                   </tr>`).join('')
                 : `<tr><td colspan="5"><div class="empty"><div class="empty-icon">${IC.audit}</div><div class="empty-title">No audit entries yet</div></div></td></tr>`}
@@ -5588,7 +5588,7 @@ async function uploadTaskFile(taskId) {
   try {
     hint.textContent = 'Uploading… 0%';
     await doUpload(file, { kind: 'task-attachment', taskId }, p => hint.textContent = `Uploading… ${p}%`);
-    toast('Uploaded', `"${file.name}" attached.`, 'success');
+    toast('Uploaded', `"${esc(file.name)}" attached.`, 'success');
     loadTaskFiles(taskId);
   } catch (e) {
     hint.textContent = '';
@@ -5806,7 +5806,7 @@ async function sendFile() {
     await doUpload(file, { kind: 'direct-message', recipients, note, project, taskId },
       p => hint.textContent = `Uploading… ${p}%`);
     if (project && !FS_PROJECTS.includes(project)) await projectList(true);
-    toast('Sent', `"${file.name}" sent to ${recipients.length} ${recipients.length === 1 ? 'person' : 'people'}.`, 'success');
+    toast('Sent', `"${esc(file.name)}" sent to ${recipients.length} ${recipients.length === 1 ? 'person' : 'people'}.`, 'success');
     await buildComposer();
     FILES_TAB = 'sent';
     await rdFiles();
@@ -5849,7 +5849,7 @@ async function loadInbox() {
           showDelete: FILES_TAB === 'sent',
           after: '() => loadInbox()',
           context: FILES_TAB === 'received'
-            ? `From ${f.uploadedBy?.name || '—'}`
+            ? `From ${esc(f.uploadedBy?.name || '—')}`
             : `To ${(f.recipients || []).map(r => r.name).join(', ') || (f.task ? 'task: ' + (f.task.title || '') : '—')}`,
         })).join('')
       : `<div class="file-empty">${FILES_TAB === 'received' ? 'Nothing has been sent to you yet.' : 'You have not sent any files yet.'}</div>`;
@@ -5968,8 +5968,8 @@ async function rdSettings() {
         <div class="profile-head">
           <div class="av av-xl" style="background:linear-gradient(135deg,${CU.color || '#2563eb'},#0ea5e9)">${CU.initials || '?'}</div>
           <div class="profile-info">
-            <h2>${CU.name}</h2>
-            <p>${CU.designation || '—'}</p>
+            <h2>${esc(CU.name)}</h2>
+            <p>${esc(CU.designation || '—')}</p>
             <div style="margin-top:6px">${roleBadge(CU.role)}</div>
           </div>
         </div>
@@ -5991,7 +5991,7 @@ async function rdSettings() {
       <div class="card-body">
         <div class="form-group">
           <label class="form-label">Email</label>
-          <input class="form-input" type="email" id="pf_email" placeholder="you@company.com" value="${CU.email || ''}">
+          <input class="form-input" type="email" id="pf_email" placeholder="you@company.com" value="${esc(CU.email || '')}">
         </div>
         <button class="btn btn-primary" onclick="saveProfileEmail()">${IC.check} Save Email</button>
       </div>
@@ -6156,7 +6156,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal
 // ═══════════════════════════════════════════════════════
 function openConfirm(title, msg, onOk, okCls = 'btn-danger') {
   document.getElementById('confirmTitle').textContent = title;
-  document.getElementById('confirmMsg').innerHTML     = msg;
+  document.getElementById('confirmMsg').textContent   = msg;
   const btn = document.getElementById('confirmOkBtn');
   btn.className = 'btn ' + okCls;
   btn.onclick   = onOk;
@@ -6182,8 +6182,8 @@ function toast(title, msg = '', type = 'info', duration = 4000) {
   el.innerHTML = `
     ${TOAST_ICONS[type] || TOAST_ICONS.info}
     <div class="toast-msg">
-      ${title ? `<div class="toast-title">${title}</div>` : ''}
-      ${msg    ? `<div style="font-size:12px;margin-top:2px;color:var(--text-muted)">${msg}</div>` : ''}
+      ${title ? `<div class="toast-title">${esc(title)}</div>` : ''}
+      ${msg    ? `<div style="font-size:12px;margin-top:2px;color:var(--text-muted)">${esc(msg)}</div>` : ''}
     </div>
     <button class="toast-close" onclick="this.closest('.toast').remove()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
