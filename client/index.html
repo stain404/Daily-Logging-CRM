@@ -226,13 +226,15 @@
     }
     .sb-logo-mark {
       width: 34px; height: 34px;
+      /* --sidebar-hover is dark in both themes (the sidebar never lightens),
+         so unlike .login-mark this needs no override. */
       background: var(--sidebar-hover);
-      border: 1px solid var(--accent-dim);
+      border: 1px solid rgba(255, 255, 255, .1);   /* see .login-mark */
       border-radius: var(--radius);
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
+      overflow: hidden;
     }
-    .sb-logo-mark svg { width: 18px; height: 18px; color: var(--accent); }
     .sb-logo-text { min-width: 0; }
     .sb-logo-name { font-size: 13px; font-weight: 700; color: var(--sidebar-text); letter-spacing: -.02em; font-family: var(--font-mono); }
     .sb-logo-sub  { font-size: 10px; color: var(--sidebar-text-faint); margin-top: 1px; letter-spacing: .5px; text-transform: uppercase; }
@@ -494,14 +496,30 @@
     }
     .login-head { margin-bottom: 32px; }
     .login-mark {
-      width: 48px; height: 48px;
-      background: var(--bg-panel-2);
-      border: 1px solid var(--accent-dim);
+      /* Bigger than the 48px the old glyph sat in: this mark carries real
+         detail — nested chevrons and a centre diamond — and at 48 it collapses
+         into a smudge. The login screen is the one place with room for it. */
+      width: 64px; height: 64px;
+      /* Fixed dark ground rather than var(--bg-panel-2). The mark is a neon
+         design drawn on black — over half its opaque pixels are near-black —
+         so on the light theme's pale panel it reads as a dark smudge with a
+         glow around it. Giving it the ground it was drawn for keeps it
+         legible in both themes and looks deliberate rather than pasted on. */
+      background: #0a0d13;
+      /* Not --accent-dim: the mark is already loud pink-to-cyan, and ringing
+         it in the accent pink puts two competing brand colours 2px apart. A
+         neutral hairline lets the logo be the colour. */
+      border: 1px solid rgba(255, 255, 255, .1);
       border-radius: var(--radius-lg);
       display: flex; align-items: center; justify-content: center;
       margin-bottom: 16px;
+      overflow: hidden;
     }
-    .login-mark svg { width: 24px; height: 24px; color: var(--accent-ink); }
+    .login-mark img, .sb-logo-mark img {
+      width: 100%; height: 100%;
+      object-fit: contain;
+      display: block;
+    }
     .login-title { font-size: 22px; font-weight: 800; color: var(--text-primary); letter-spacing: -.03em; font-family: var(--font-mono); }
     .login-sub   { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
     /* "Keep me signed in" and the reset link share a line: they are the two
@@ -1633,13 +1651,8 @@
   <div class="grain-gradient" aria-hidden="true"></div>
   <div class="login-box">
     <div class="login-head">
-      <!-- LOGO: replace the <svg> below with the Al Quba mark. Inline it as an
-           <img src="data:image/png;base64,…"> or as raw SVG — not a file path
-           and not a CDN URL: the app ships as this one document and has to
-           keep working offline. Keep it inside .login-mark so the sizing and
-           the sidebar lockup stay in step. -->
       <div class="login-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <img src="logo-alquba.png" alt="Al Quba" width="128" height="128">
       </div>
       <div class="login-title">Al Quba</div>
       <div class="login-sub">Internal Management System</div>
@@ -1685,7 +1698,7 @@
       <div class="grain-gradient" aria-hidden="true"></div>
       <div class="sb-logo">
         <div class="sb-logo-mark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <img src="logo-alquba.png" alt="" width="128" height="128">
         </div>
         <div class="sb-logo-text">
           <div class="sb-logo-name">Al Quba</div>
