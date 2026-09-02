@@ -112,8 +112,8 @@ A near-black neutral scale carries structure; one warm amber is the only non-sem
 - **Amber** (`#e8a53d`, hover `#ffc670`, dimmed `#c9862a`): the one accent. Primary buttons, active sidebar item, focus rings, links, the brand mark, live indicators. Reads as "the color that means action or attention" everywhere it appears — same rationing discipline as the previous Confident Blue, just a different hue chosen for its trading-terminal heritage (amber-on-black is the literal, historical color of financial terminal displays).
 
 ### Secondary (status semantics — meaning only, never decoration)
-- **Green** (`#34d399`): completed, approved, success, online status.
-- **Red** (`#f2495c`): delayed, rejected, destructive actions, offline status.
+- **Green** (`#34d399`): completed, success, online status.
+- **Red** (`#f2495c`): delayed, destructive actions, offline status.
 - **Warn** (`#f5a623`): on-hold, pending, caution — deliberately a distinct hue from primary Amber so "in progress" (amber) and "on hold" (warn) never collide.
 - **Violet** (`#a78bfa`): analytics, completion rate, ratings.
 - **Cyan** (`#22d3ee`): secondary/tertiary accent, used least often.

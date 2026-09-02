@@ -2173,8 +2173,8 @@ async function exportTasksCSV() {
   try {
     showGlobalLoader();
     const { tasks } = await GET('/tasks?limit=5000');
-    const headers = ['Task ID', 'Employee', 'Emp ID', 'Date', 'Title', 'Project', 'Status', 'Priority', 'Hours', 'Completion', 'Approved'];
-    const rows = tasks.map(t => [t._id, getName(t.userId), t.userId?.empId || '', t.date, t.title, t.project, t.status, t.priority, t.hours, t.completion + '%', t.approved ? 'Yes' : t.rejected ? 'Rejected' : 'Pending']);
+    const headers = ['Task ID', 'Employee', 'Emp ID', 'Date', 'Title', 'Project', 'Status', 'Priority', 'Hours', 'Completion', 'Manager Feedback', 'Rating'];
+    const rows = tasks.map(t => [t._id, getName(t.userId), t.userId?.empId || '', t.date, t.title, t.project, t.status, t.priority, t.hours, t.completion + '%', t.mgComment || '', t.mgRating || '']);
     dlCSV([headers, ...rows], `AlQuba_Tasks_${today()}.csv`);
   } catch (e) { toast('Export failed', e.message, 'error'); } finally { hideGlobalLoader(); }
 }
@@ -2362,7 +2362,7 @@ function getNavItems() {
     // through the report builder is what stopped managers from looking.
     { icon: 'calendar',      label: 'Daily Work',     page: 'daily' },
     { icon: 'teams',         label: 'My Team',        page: 'teams' },
-    { icon: 'reviews',       label: 'Reviews',        page: 'reviews' },
+    { icon: 'reviews',       label: 'Feedback',       page: 'reviews' },
     { icon: 'reports',       label: 'Reports',        page: 'reports' },
     { icon: 'notifications', label: 'Notifications',  page: 'notifications' },
     { icon: 'settings',      label: 'Settings',       page: 'settings' },
@@ -2505,7 +2505,7 @@ function sp(page) {
   syncNavGroups();
   const titles = {
     dashboard: 'Dashboard', tasks: 'Tasks', submit: 'Daily Update',
-    daily: 'Daily Work', reviews: 'Task Reviews', employees: 'Employees', teams: 'Teams',
+    daily: 'Daily Work', reviews: 'Task Feedback', employees: 'Employees', teams: 'Teams',
     departments: 'Departments', reports: 'Reports & Analytics',
     audit: 'Audit Log', notifications: 'Notifications', settings: 'Settings',
     files: 'Files',
@@ -2760,12 +2760,6 @@ async function rdDash() {
     // Contributors only mean something across multiple people.
     const showContrib = ['manager','admin','superadmin','hr'].includes(CU.role);
 
-    // Whoever can decide on a submission gets the queue depth. A manager opens
-    // the Reviews page from it; admin and the CEO review from Daily Work,
-    // which is where their review buttons already live.
-    const reviewer   = ['manager', 'admin', 'superadmin'].includes(CU.role);
-    const reviewPage = CU.role === 'manager' ? 'reviews' : 'daily';
-
     // Every tile answers "which ones?" — so every tile opens the list that
     // answers it, filtered. `go` is [page, filters]; the filters are applied to
     // the destination page's own controls, so what lands is a normal filtered
@@ -2788,11 +2782,6 @@ async function rdDash() {
       { label: `Today's Updates`,      val: stats.todayCount, cls: 'stat-amber',  icon: 'calendar',
         meta: fmtDate(today()),
         go: ['tasks', { date: today() }] },
-      ...(reviewer ? [{
-        label: 'Pending Reviews', val: stats.pendingReviews || 0, cls: 'stat-purple', icon: 'reviews',
-        meta: stats.pendingReviews ? 'Waiting on you' : 'Nothing waiting',
-        go: [reviewPage, {}],
-      }] : []),
     ];
 
     const statsHtml = `<div class="stat-grid">${statCards.map((s, i) =>
@@ -3028,8 +3017,8 @@ async function rdTasks() {
     <div class="card">
       <div class="table-wrap">
         <table class="tbl">
-          <thead><tr><th>Employee</th><th>Task</th><th>Project</th><th>Status</th><th>Progress</th><th>Deadline</th><th>Review</th><th>Actions</th></tr></thead>
-          <tbody id="taskTbody"><tr><td colspan="8"><div class="page-loader"><span class="spin">${IC.spinner}</span>Loading tasks…</div></td></tr></tbody>
+          <thead><tr><th>Employee</th><th>Task</th><th>Project</th><th>Status</th><th>Progress</th><th>Deadline</th><th>Actions</th></tr></thead>
+          <tbody id="taskTbody"><tr><td colspan="7"><div class="page-loader"><span class="spin">${IC.spinner}</span>Loading tasks…</div></td></tr></tbody>
         </table>
       </div>
     </div>`;
@@ -3162,9 +3151,9 @@ function submitForTask(id) {
   sp('submit');
 }
 
-// Reviewing happens on the Reviews page, which shows the submitted update in
-// full. The old inline approve was one click from a list that displayed none
-// of the work it was approving.
+// Feedback is written on the Feedback page, which shows the submitted update
+// in full. Commenting from a list row meant writing feedback on work none of
+// which was on screen.
 function reviewTask(id) {
   RV_FOCUS = id;
   sp('reviews');
@@ -3212,11 +3201,6 @@ async function loadTasks() {
     tb.innerHTML = filtered.length
       ? filtered.map(t => {
           const u = t.userId;
-          const reviewStatus = t.approved
-            ? `<span class="badge badge-green">${IC.check} Approved</span>`
-            : t.rejected
-              ? `<span class="badge badge-red">${IC.x} Rejected</span>`
-              : `<span class="badge badge-grey">Pending</span>`;
           const late = lateInfo(t);
           return `<tr class="${late.tier ? `late-${late.tier}` : ''}">
             <td>${employeeCell(u)}</td>
@@ -3225,24 +3209,23 @@ async function loadTasks() {
             <td>${sbadge(t.status)}</td>
             <td style="min-width:110px">${pbar(t.completion)}</td>
             <td style="min-width:118px">${deadlineCell(t)}</td>
-            <td>${reviewStatus}</td>
             <td><div class="tbl-actions">
               <button class="btn btn-secondary btn-xs" onclick="viewTask('${t._id}')" title="View details">${IC.eye}</button>
-              ${isMine(t) && !t.approved
+              ${isMine(t)
                 ? `<button class="btn btn-primary btn-xs" onclick="submitForTask('${t._id}')" title="Report progress on this task in your daily update">${IC.submit} Submit</button>` : ''}
-              ${canReview && t.submittedAt && !t.approved && !t.rejected
-                ? `<button class="btn btn-success btn-xs" onclick="reviewTask('${t._id}')" title="Review this submission">${IC.reviews} Review</button>` : ''}
+              ${canReview && t.submittedAt
+                ? `<button class="btn btn-success btn-xs" onclick="reviewTask('${t._id}')" title="Open this submission in Feedback">${IC.reviews} Feedback</button>` : ''}
               ${canReview ? `<button class="btn btn-danger btn-xs" onclick="deleteTask('${t._id}','${t.title.replace(/'/g,"\\'")}',loadTasks)" title="Delete task">${IC.trash}</button>` : ''}
             </div></td>
           </tr>`;
         }).join('')
-      : `<tr><td colspan="8"><div class="empty">
+      : `<tr><td colspan="7"><div class="empty">
           <div class="empty-icon">${IC.tasks}</div>
           <div class="empty-title">No tasks found</div>
           <div class="empty-sub">Try adjusting your filters or submit a new daily update.</div>
         </div></td></tr>`;
   } catch (e) {
-    tb.innerHTML = `<tr><td colspan="8"><div class="empty">
+    tb.innerHTML = `<tr><td colspan="7"><div class="empty">
       <div class="empty-icon">${IC.alert}</div>
       <div class="empty-title">Failed to load tasks</div>
       <div class="empty-sub">${e.message}</div>
@@ -3280,18 +3263,17 @@ async function viewTask(id) {
         <div class="profile-field-label" style="margin-bottom:2px">Attachments</div>
         <div id="taskFilesBox"><div class="file-empty">Loading files…</div></div>
       </div>
-      ${['manager','admin','superadmin'].includes(CU.role) && t.submittedAt && !t.approved && !t.rejected
+      ${['manager','admin','superadmin'].includes(CU.role) && t.submittedAt
         ? `<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
-             <button class="btn btn-primary btn-sm" onclick="closeModal();reviewTask('${t._id}')">${IC.reviews} Review this submission</button>
+             <button class="btn btn-primary btn-sm" onclick="closeModal();reviewTask('${t._id}')">${IC.reviews} ${t.reviewedAt ? 'See your feedback' : 'Leave feedback'}</button>
            </div>`
         : ''}`,
       null, true
     );
 
     // Read-only, deliberately. This dialog is reached from every list in the
-    // app, including ones that show no context for the work — approving from
-    // here meant deciding on a task from a row of badges. The button above
-    // hands off to Reviews, which shows the submitted update in full.
+    // app, including ones that show no context for the work. The button above
+    // hands off to Feedback, which shows the submitted update in full.
     //
     // Populated after the modal is in the DOM: the attachment list is a second
     // request and should not hold up the details the user asked for.
@@ -3854,14 +3836,13 @@ async function dwLoad() {
 
     box.innerHTML = tasks.length
       ? `<div class="card"><div class="table-wrap"><table class="tbl">
-          <thead><tr><th>Employee</th><th>Task</th><th>Work Done</th><th>Status</th><th>Progress</th><th>Hours</th><th>Review</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Employee</th><th>Task</th><th>Work Done</th><th>Status</th><th>Progress</th><th>Hours</th><th>Feedback</th><th>Actions</th></tr></thead>
           <tbody>${tasks.map(t => {
             const late = lateInfo(t);
-            const review = t.approved
-              ? `<span class="badge badge-green">${IC.check} Approved</span>`
-              : t.rejected
-                ? `<span class="badge badge-red">${IC.x} Rejected</span>`
-                : `<span class="badge badge-grey">Pending</span>`;
+            // Whether a manager has said anything back, not a verdict on the work.
+            const feedback = t.reviewedAt
+              ? `<span class="badge badge-green">${IC.check} Given</span>`
+              : `<span class="badge badge-grey">—</span>`;
             return `<tr class="${late.tier ? `late-${late.tier}` : ''}">
               <td>${employeeCell(t.userId)}</td>
               <td style="max-width:170px">${taskTitleCell(t)}</td>
@@ -3869,11 +3850,11 @@ async function dwLoad() {
               <td>${sbadge(t.status)}</td>
               <td style="min-width:110px">${pbar(t.completion)}</td>
               <td style="white-space:nowrap">${Number(t.hours) || 0}h${t.attachmentCount ? ` <span title="${esc((t.attachments || []).map(f => f.filename).join(', ')) || `${t.attachmentCount} attachment${t.attachmentCount === 1 ? '' : 's'}`}">${IC.paperclip}</span>` : ''}</td>
-              <td>${review}</td>
+              <td>${feedback}</td>
               <td><div class="tbl-actions">
                 <button class="btn btn-secondary btn-xs" onclick="viewTask('${t._id}')" title="View the full update">${IC.eye} View</button>
-                ${['manager','admin','superadmin'].includes(CU.role) && !t.approved && !t.rejected
-                  ? `<button class="btn btn-success btn-xs" onclick="reviewTask('${t._id}')" title="Review this submission">${IC.reviews}</button>` : ''}
+                ${['manager','admin','superadmin'].includes(CU.role)
+                  ? `<button class="btn btn-success btn-xs" onclick="reviewTask('${t._id}')" title="Open this submission in Feedback">${IC.reviews}</button>` : ''}
               </div></td>
             </tr>`;
           }).join('')}</tbody>
@@ -3932,18 +3913,21 @@ async function rdReviews() {
     const { tasks } = await GET('/tasks?limit=200');
     // `submittedAt` rather than a status guess. A task can sit at "in progress"
     // because a manager set it there, with nothing written against it — there
-    // is nothing to review until the employee sends their update, and the
-    // server refuses the review anyway.
-    const pending = tasks.filter(t => !t.approved && !t.rejected && t.submittedAt);
-    const done    = tasks.filter(t => t.approved || t.rejected);
+    // is nothing to give feedback on until the employee sends their update,
+    // and the server refuses the feedback anyway.
+    //
+    // The split is "has anyone replied yet", not a verdict — a daily update is
+    // a record of work done, so there is nothing here to approve or refuse.
+    const pending = tasks.filter(t => t.submittedAt && !t.reviewedAt);
+    const done    = tasks.filter(t => t.reviewedAt);
 
     el.innerHTML = `
       <div class="tab-bar">
         <div class="tab active" id="rvt1" onclick="switchReviewTab(1)">
-          Pending Reviews <span class="tab-count">${pending.length}</span>
+          Awaiting Feedback <span class="tab-count">${pending.length}</span>
         </div>
         <div class="tab" id="rvt2" onclick="switchReviewTab(2)">
-          Reviewed <span class="tab-count">${done.length}</span>
+          Feedback Given <span class="tab-count">${done.length}</span>
         </div>
       </div>
 
@@ -3952,7 +3936,7 @@ async function rdReviews() {
           ? `<div class="empty">
               <div class="empty-icon">${IC.check}</div>
               <div class="empty-title">All caught up!</div>
-              <div class="empty-sub">No pending task reviews. Your team is on track.</div>
+              <div class="empty-sub">Every submitted update has your feedback on it.</div>
             </div>`
           : pending.map(t => {
               const u = t.userId;
@@ -3978,7 +3962,6 @@ async function rdReviews() {
                   <div class="review-desc">${t.description || t.desc || 'No description provided.'}</div>
                   ${attachmentStrip(t)}
                   ${t.challenges ? `<div class="review-challenge">${IC.alert}<span>${t.challenges}</span></div>` : ''}
-                  ${t.mgComment ? `<div style="padding:10px;background:var(--warn-wash);border-radius:var(--radius);border-left:3px solid var(--warn);font-size:12px;color:var(--text-primary);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span><strong>Prior comment:</strong> ${t.mgComment}</span><button class="btn btn-xs" style="background:var(--red-wash);color:var(--red-ink);flex-shrink:0" onclick="clearReview('${t._id}')" title="Delete this comment">${IC.trash} Clear</button></div>` : ''}
                   <div class="form-group">
                     <textarea class="form-textarea" id="rc_${t._id}" placeholder="Write your feedback for this task…"></textarea>
                   </div>
@@ -3987,9 +3970,7 @@ async function rdReviews() {
                       <option value="">Rate this task</option>
                       ${[1,2,3,4,5].map(n => `<option value="${n}">${'★'.repeat(n)} ${n}/5</option>`).join('')}
                     </select>
-                    <button class="btn btn-success btn-sm" onclick="reviewAction('${t._id}','approve')">${IC.check} Approve</button>
-                    <button class="btn btn-ghost btn-sm"   onclick="reviewAction('${t._id}','clarify')">${IC.question} Request Clarification</button>
-                    <button class="btn btn-danger btn-sm"  onclick="reviewAction('${t._id}','reject')">${IC.x} Reject</button>
+                    <button class="btn btn-primary btn-sm" onclick="reviewAction('${t._id}')">${IC.check} Send Feedback</button>
                     <button class="btn btn-danger btn-xs"  onclick="deleteTask('${t._id}','${t.title.replace(/'/g,"\\'")}',rdReviews)" title="Permanently delete this task" style="margin-left:auto">${IC.trash} Delete</button>
                   </div>
                 </div>
@@ -3999,21 +3980,21 @@ async function rdReviews() {
 
       <div id="rv2" style="display:none">
         ${done.length === 0
-          ? `<div class="empty"><div class="empty-icon">${IC.reviews}</div><div class="empty-title">No reviewed tasks yet</div></div>`
+          ? `<div class="empty"><div class="empty-icon">${IC.reviews}</div><div class="empty-title">No feedback given yet</div></div>`
           : `<div class="card"><div class="table-wrap">
               <table class="tbl">
-                <thead><tr><th>Employee</th><th>Task</th><th>Decision</th><th>Rating</th><th>Feedback</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Employee</th><th>Task</th><th>Reviewer</th><th>Rating</th><th>Feedback</th><th>Actions</th></tr></thead>
                 <tbody>
                 ${done.slice(0, 30).map(t => {
                   const u = t.userId;
-                  return `<tr>
+                  return `<tr id="rvrow-${t._id}">
                     <td>${employeeCell(u)}</td>
                     <td style="max-width:200px">${taskTitleCell(t)}</td>
-                    <td>${t.approved ? `<span class="badge badge-green">${IC.check} Approved</span>` : `<span class="badge badge-red">${IC.x} Rejected</span>`}</td>
+                    <td style="font-size:12px">${getName(t.reviewedBy) || '—'}</td>
                     <td>${t.mgRating ? stars(t.mgRating) : '—'}</td>
                     <td style="font-size:12px;color:var(--text-muted);max-width:200px">${t.mgComment || '—'}</td>
                     <td><div class="tbl-actions">
-                      <button class="btn btn-ghost btn-xs" title="Clear review (keep task)" onclick="clearReview('${t._id}')" style="color:var(--accent-ink)">${IC.refresh} Clear</button>
+                      <button class="btn btn-ghost btn-xs" title="Clear feedback (keep task)" onclick="clearReview('${t._id}')" style="color:var(--accent-ink)">${IC.refresh} Clear</button>
                       <button class="btn btn-danger btn-xs" title="Permanently delete task" onclick="deleteTask('${t._id}','${t.title.replace(/'/g,"\\'")}',rdReviews)">${IC.trash} Delete</button>
                     </div></td>
                   </tr>`;
@@ -4022,19 +4003,21 @@ async function rdReviews() {
               </table>
             </div></div>`}
       </div>`;
-    // Arrived here from a Review button on a task row — take the manager to
+    // Arrived here from a Feedback button on a task row — take the manager to
     // the card they clicked rather than to the top of a queue of forty.
     if (RV_FOCUS) {
-      const card = document.getElementById('rvcard-' + RV_FOCUS);
+      const card = document.getElementById('rvcard-' + RV_FOCUS)
+                || document.getElementById('rvrow-' + RV_FOCUS);
       RV_FOCUS = null;
       if (card) {
+        if (card.tagName === 'TR') switchReviewTab(2);
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         card.classList.add('review-focus');
         setTimeout(() => card.classList.remove('review-focus'), 2200);
       }
     }
   } catch (e) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">${IC.alert}</div><div class="empty-title">Failed to load reviews</div><div class="empty-sub">${e.message}</div><button class="btn btn-primary" onclick="rdReviews()">${IC.refresh} Retry</button></div>`;
+    el.innerHTML = `<div class="empty"><div class="empty-icon">${IC.alert}</div><div class="empty-title">Failed to load feedback</div><div class="empty-sub">${e.message}</div><button class="btn btn-primary" onclick="rdReviews()">${IC.refresh} Retry</button></div>`;
   }
 }
 
@@ -4045,33 +4028,35 @@ function switchReviewTab(n) {
   document.getElementById('rvt2').classList.toggle('active', n === 2);
 }
 
-async function reviewAction(id, action) {
+async function reviewAction(id) {
+  const comment = document.getElementById('rc_' + id)?.value || '';
+  const rating  = parseInt(document.getElementById('rr_' + id)?.value) || null;
+
+  // One of the two is enough — a bare rating is a legitimate reply, and so is
+  // a comment with no score. Both empty is the only thing worth stopping.
+  if (!comment.trim() && !rating) {
+    toast('Nothing to send', 'Write a comment or pick a rating first.', 'warning');
+    return;
+  }
+
   try {
-    const comment = document.getElementById('rc_' + id)?.value || '';
-    const rating  = parseInt(document.getElementById('rr_' + id)?.value) || null;
-    if (action === 'clarify') {
-      if (!comment.trim()) { toast('Comment required', 'Please write a message explaining what clarification is needed.', 'warning'); return; }
-      await PUT('/tasks/' + id + '/review', { action: 'clarify', comment: 'Clarification needed: ' + comment });
-      toast('Clarification requested', '', 'info');
-    } else {
-      await PUT('/tasks/' + id + '/review', { action, comment, rating });
-      toast(action === 'approve' ? 'Task approved' : 'Task rejected', '', action === 'approve' ? 'success' : 'error');
-    }
+    await PUT('/tasks/' + id + '/review', { comment, rating });
+    toast('Feedback sent', '', 'success');
     rdReviews();
-  } catch (e) { toast('Review failed', e.message, 'error'); }
+  } catch (e) { toast('Could not send feedback', e.message, 'error'); }
 }
 
 async function clearReview(id) {
-  if (!confirm('Clear this review? The task will go back to pending and all feedback (comment, rating, approval) will be removed.')) return;
+  if (!confirm('Clear this feedback? The comment and rating will be removed and the update goes back to awaiting feedback.')) return;
   try {
     await PUT('/tasks/' + id + '/clear-review', {});
-    toast('Review cleared', 'Task is back in the pending queue.', 'info');
+    toast('Feedback cleared', 'The update is back in the awaiting-feedback list.', 'info');
     closeModal();
     // Refresh whichever page is currently active
     const activePage = document.querySelector('.page.active');
     if (activePage?.id === 'page-reviews') rdReviews();
     else loadTasks();
-  } catch (e) { toast('Failed to clear review', e.message, 'error'); }
+  } catch (e) { toast('Failed to clear feedback', e.message, 'error'); }
 }
 
 async function deleteTask(id, title, refreshFn) {
@@ -5313,16 +5298,16 @@ async function rdNotifs() {
 // for the thing it was telling them about.
 //
 // The task modal is the destination wherever a task is attached, because it is
-// the one surface that shows the work, the review and the files together.
+// the one surface that shows the work, the feedback and the files together.
 function notifDest(n) {
   const taskId = getId(n.task);
 
   if (taskId) {
-    // A reviewer being told something was submitted wants the review controls,
+    // A manager being told something was submitted wants the feedback box,
     // not a read-only view — reviewTask() opens the queue focused on the row.
     const canReview = ['manager', 'admin', 'superadmin'].includes(CU.role);
     if (n.type === 'submitted' && canReview) {
-      return { label: 'Review this submission', run: () => reviewTask(taskId) };
+      return { label: 'Leave feedback on this update', run: () => reviewTask(taskId) };
     }
     return { label: 'Open the task', run: () => viewTask(taskId) };
   }

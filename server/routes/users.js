@@ -154,15 +154,14 @@ router.get('/:id/stats', protect, authorize('hr', 'manager', 'admin', 'superadmi
     const tasks      = await Task.find({ userId: req.params.id });
     const total      = tasks.length;
     const completed  = tasks.filter(t => t.status === 'completed').length;
-    const approved   = tasks.filter(t => t.approved).length;
-    const rejected   = tasks.filter(t => t.rejected).length;
     const delayed    = tasks.filter(t => t.status === 'delayed').length;
+    const reviewed   = tasks.filter(t => t.reviewedAt).length;
     const totalHours = tasks.reduce((s, t) => s + (t.hours || 0), 0);
     const rate       = total ? Math.round((completed / total) * 100) : 0;
 
     res.json({
       success: true,
-      stats: { total, completed, approved, rejected, delayed, totalHours, completionRate: rate },
+      stats: { total, completed, reviewed, delayed, totalHours, completionRate: rate },
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

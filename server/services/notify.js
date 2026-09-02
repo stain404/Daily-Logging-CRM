@@ -148,37 +148,24 @@ async function taskSubmitted(task, actor, actorName, { late = false } = {}) {
   return markEmailed(docs, emailedIds);
 }
 
-// A manager reviewed a submission. Goes to the task owner — and to the CEO
-// only on a rejection, which is the one review outcome that signals something
-// went wrong rather than something routine finishing normally.
-async function taskReviewed(task, actor, actorName, action) {
-  const chiefs = action === 'reject' ? await ceos() : [];
-  const severity = action === 'approve' ? 'success'
-                 : action === 'reject'  ? 'danger'
-                 : 'info';
-  const verb = action === 'approve' ? 'approved'
-             : action === 'reject'  ? 'rejected'
-             : 'requested clarification on';
-
-  const inApp = notify([task.userId, ...chiefs], {
+// A manager left feedback on a submission. Goes to the task owner alone —
+// feedback on a daily update is between the two of them, and there is no
+// verdict here for anyone further up the chain to act on.
+async function taskReviewed(task, actor, actorName) {
+  const inApp = notify([task.userId], {
     type: 'reviewed',
-    title: action === 'approve' ? 'Task approved'
-         : action === 'reject'  ? 'Task rejected'
-         : 'Clarification requested',
-    message: `${actorName} ${verb} "${task.title}".`,
+    title: 'Feedback on your update',
+    message: `${actorName} left feedback on "${task.title}".`,
     task: task._id,
     actor,
-    severity,
+    severity: 'info',
   });
 
-  // Only the task owner is emailed. Emailing every superadmin on every
-  // individual review turns the CEO's inbox into a firehose within a week;
-  // he gets the in-app record on rejections and nothing on the rest.
   const email = mailer.sendToUsers([task.userId], actor, {
     type: 'reviewed',
     task,
     render: ({ url }) => templates.taskReviewed({
-      task, reviewerName: actorName, action, url,
+      task, reviewerName: actorName, url,
     }),
   });
 

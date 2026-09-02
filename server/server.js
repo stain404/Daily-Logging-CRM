@@ -217,7 +217,7 @@ async function seedDatabase() {
           : status === 'in-progress' ? Math.floor(Math.random() * 80) + 10
           : status === 'not-started' ? 0
           : Math.floor(Math.random() * 50);
-        const approved   = daysAgo > 0 && status === 'completed' && Math.random() > 0.2;
+        const reviewed   = daysAgo > 0 && status === 'completed' && Math.random() > 0.2;
 
         taskDocs.push({
           userId:      u._id,
@@ -234,12 +234,10 @@ async function seedDatabase() {
           challenges:  Math.random() > 0.6 ? 'Encountered some technical blockers.' : '',
           support:     'No',
           nextPlan:    `Continue with ${TITLES[Math.floor(Math.random() * TITLES.length)].toLowerCase()}`,
-          approved,
-          rejected:    !approved && daysAgo > 0 && Math.random() > 0.92,
-          mgComment:   approved ? 'Good work!' : '',
-          mgRating:    approved ? Math.floor(Math.random() * 2) + 4 : null,
-          reviewedBy:  approved ? findU('manager1')._id : null,
-          reviewedAt:  approved ? new Date() : null,
+          mgComment:   reviewed ? 'Good work!' : '',
+          mgRating:    reviewed ? Math.floor(Math.random() * 2) + 4 : null,
+          reviewedBy:  reviewed ? findU('manager1')._id : null,
+          reviewedAt:  reviewed ? new Date() : null,
         });
       }
     }

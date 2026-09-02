@@ -205,14 +205,14 @@ async function run() {
     record('2.8', 'employee assigns a task', 403, r.status);
   }
   {
-    // Employee A's own entry, so this isolates self-review from cross-team access.
+    // Employee A's own entry, so this isolates self-feedback from cross-team access.
     const own = await call('GET', '/api/tasks', { token: eA.token });
     const mine = own.data?.tasks?.[0];
     if (mine) {
       const r = await call('PUT', `/api/tasks/${mine._id}/review`, {
-        token: eA.token, body: { action: 'approve', rating: 5 },
+        token: eA.token, body: { comment: 'probe', rating: 5 },
       });
-      record('2.9', 'employee approves their OWN task', 403, r.status);
+      record('2.9', 'employee leaves feedback on their OWN task', 403, r.status);
     } else {
       console.log('  [-] 2.9     skipped — employee A has no task to review');
     }
@@ -249,16 +249,16 @@ async function run() {
     const target = bTasks.data?.tasks?.[0];
     if (target) {
       const r = await call('PUT', `/api/tasks/${target._id}/review`, {
-        token: mA.token, body: { action: 'approve', comment: 'probe', rating: 4 },
+        token: mA.token, body: { comment: 'probe', rating: 4 },
       });
-      record('9.2b', "manager A reviews manager B's team task", 403, r.status);
+      record('9.2b', "manager A leaves feedback on manager B's team task", 403, r.status);
       if (r.status === 200) {
         await call('PUT', `/api/tasks/${target._id}/clear-review`, { token: mB.token });
-        console.log('          (reverted: review cleared)');
+        console.log('          (reverted: feedback cleared)');
       }
 
       const c = await call('PUT', `/api/tasks/${target._id}/clear-review`, { token: mA.token });
-      record('9.2c', "manager A clears review on manager B's team task", 403, c.status);
+      record('9.2c', "manager A clears feedback on manager B's team task", 403, c.status);
     } else {
       console.log('  [-] 9.2b/c  skipped — manager B\'s team has no tasks');
     }

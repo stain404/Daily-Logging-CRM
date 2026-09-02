@@ -100,7 +100,7 @@ Test through the **API with a real token**, not by looking at the UI. Every deni
 - [ ] `2.6` Superadmin deletes own account → blocked
 - [x] `2.7` Employee lists users → 403
 - [x] `2.8` Employee assigns a task → 403
-- [x] `2.9` Employee reviews their **own** task → 403 (no self-approval)
+- [x] `2.9` Employee leaves feedback on their **own** task → 403 (no self-review)
 - [x] `2.10` Manager opens the department report → 403
 - [o] `2.11` Manager A reads Manager B's employee's tasks via `?userId=` → 403
 - [o] `2.12` Manager A reviews Manager B's employee's task → 403
@@ -120,7 +120,7 @@ Test through the **API with a real token**, not by looking at the UI. Every deni
 - [ ] `3.4` Submit today, submit again tomorrow → allowed, new row
 - [ ] `3.5` Employee edits **yesterday's** entry → spec says same-day only, API allows it, see `9.5`
 - [ ] `3.6` Employee edits **someone else's** entry by ID → 403
-- [ ] `3.7` Employee sets `approved` / `mgRating` on their own entry (create **and** edit) → stripped
+- [ ] `3.7` Employee sets `mgComment` / `mgRating` / `reviewedBy` on their own entry (create **and** edit) → stripped
 - [ ] `3.8` Employee moves their own `dueDate` → stripped
 - [x] `3.9` No `title` → 400 · no `project` → 400
   - Toast: "Validation error — Please fill in all required fields." Title-without-project also blocked
@@ -163,20 +163,27 @@ Test through the **API with a real token**, not by looking at the UI. Every deni
 
 ---
 
-## 5 · Review
+## 5 · Manager feedback
 
-- [ ] `5.1` Approve → `approved`, reviewer name + timestamp shown
-- [ ] `5.2` Reject → `rejected`; flipping approve/reject is clean, never both true
-- [ ] `5.3` Clarify → adds a comment, leaves approval state alone
-- [ ] `5.4` Approve with rating 5, then clarify with no rating → **is the rating wiped?** see `9.6`
-- [ ] `5.5` Rating 0, 6, -1, `"five"` → rejected
-- [ ] `5.6` Review action other than approve/reject/clarify → 400
-- [ ] `5.7` Review a non-existent task ID → 404, not 500
-- [ ] `5.8` Review a malformed ID (`abc`) → clean error, not a CastError 500
-- [ ] `5.9` Clear review → feedback wiped, back to pending, audit entry written
-- [ ] `5.10` Can a manager clear an **admin's** review? Decide the rule, then test it
+> There is no approve/reject on a daily update any more — it records work already
+> done, so a manager replies with a comment, a rating, or both, and nothing is
+> ever marked granted or refused. Only the org-chart flow (§12) carries a verdict.
+
+- [ ] `5.1` Comment + rating → both stored, reviewer name + timestamp shown
+- [ ] `5.2` Comment only (no rating) → accepted, rating stays null
+- [ ] `5.3` Rating only (no comment) → accepted
+- [ ] `5.4` Neither comment nor rating → 400, nothing written
+- [ ] `5.5` Rating 0, 6, -1, `"five"` → 400
+- [ ] `5.6` Second feedback on the same task **replaces** the first, cleanly
+- [ ] `5.7` Feedback on a non-existent task ID → 404, not 500
+- [ ] `5.8` Feedback on a malformed ID (`abc`) → clean error, not a CastError 500
+- [ ] `5.9` Clear feedback → comment/rating/reviewer wiped, row returns to
+      **Awaiting Feedback**, audit entry written
+- [ ] `5.10` Can a manager clear an **admin's** feedback? Decide the rule, then test it
 - [ ] `5.11` Employee sees the comment and rating on their own entry
-- [ ] `5.12` Reviewing does **not** change the employee's `status` / `completion`
+- [ ] `5.12` Feedback does **not** change the employee's `status` / `completion`
+- [ ] `5.13` Feedback on a task with no `submittedAt` → 400 with the "not submitted yet" message
+- [ ] `5.14` No `approved` / `rejected` field comes back on any task payload
 
 ---
 
@@ -189,7 +196,8 @@ Build a known dataset first — e.g. one employee with exactly 4 tasks: 2 comple
 - [ ] `6.2` Completion rate = completed ÷ total, rounded — verify a messy case (1/3 → 33)
 - [ ] `6.3` Employee with **zero** tasks in range is excluded
   - Confirm that's wanted — someone who logged nothing vanishes rather than showing 0%
-- [ ] `6.4` `pending` = neither approved nor rejected; a clarify-only entry still counts pending
+- [ ] `6.4` The performance report no longer carries a `pending` count — confirm nothing in the
+      UI or a CSV export still expects one
 - [ ] `6.5` Date range filters correctly; a task dated exactly `from` **is** included
 - [ ] `6.6` `from` later than `to` → empty result, not an error
 - [ ] `6.7` Manager's employee report shows **only** their own team
@@ -340,17 +348,18 @@ Scoping is enforced on some endpoints and missing on others. **All six confirmed
 `PUT /api/tasks/:id` checks ownership but never the date, though the spec says same-day only.
 
 - [ ] `9.5a` Employee edits an entry from two weeks ago → allowed?
-- [ ] `9.5b` Employee edits an entry a manager already **approved** → approval stays attached to
-      rewritten content?
+- [ ] `9.5b` Employee edits an entry a manager already left feedback on → the feedback stays
+      attached to rewritten content?
 
-> `9.5b` is the one that matters: an approval can end up attached to work changed afterwards,
-> and the audit trail won't make that obvious.
+> `9.5b` is the one that matters: a comment and rating can end up attached to work changed
+> afterwards, and the audit trail won't make that obvious.
 
-### 9.6 · "Clarify" wipes an existing rating
+### 9.6 · Re-sending feedback overwrites the earlier rating — **by design, worth confirming**
 
-`tasks.js:314` runs `mgRating = rating || null` on **every** action, clarify included.
+The feedback route sets `mgRating = rating || null` on every call, so sending a comment with the
+rating box left blank clears a rating sent earlier.
 
-- [ ] `9.6a` Approve with rating 5, then clarify with no rating → is the 5 gone?
+- [ ] `9.6a` Send rating 5, then send a comment with no rating → is the 5 gone?
 - [ ] `9.6b` Does the lost rating shift that person's employee-of-month average?
 
 ### 9.7 · Employee-of-month mixed two clocks — **FIXED** → F3

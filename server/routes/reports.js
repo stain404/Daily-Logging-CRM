@@ -38,7 +38,6 @@ router.get('/employee', protect, authorize('hr', 'manager', 'admin', 'superadmin
       const tasks     = await Task.find({ userId: u._id, ...taskFilter });
       const completed = tasks.filter(t => t.status === 'completed').length;
       const delayed   = tasks.filter(t => t.status === 'delayed').length;
-      const pending   = tasks.filter(t => !t.approved && !t.rejected).length;
       const hours     = tasks.reduce((s, t) => s + (t.hours || 0), 0);
       const rate      = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
 
@@ -52,7 +51,6 @@ router.get('/employee', protect, authorize('hr', 'manager', 'admin', 'superadmin
         total:          tasks.length,
         completed,
         delayed,
-        pending,
         completionRate: rate,
         totalHours:     hours,
       };

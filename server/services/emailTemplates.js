@@ -174,19 +174,14 @@ function dailyUpdate({ submittedByName, tasks, submittedAt, url, late }) {
   });
 }
 
-// Task reviewed → the task owner.
-function taskReviewed({ task, reviewerName, action, url }) {
-  const verb = action === 'approve' ? 'approved'
-             : action === 'reject'  ? 'rejected'
-             : 'requested clarification on';
-  const head = action === 'approve' ? 'Your task was approved'
-             : action === 'reject'  ? 'Your task was rejected'
-             : 'Clarification requested';
+// Manager feedback on a submitted update → the task owner.
+function taskReviewed({ task, reviewerName, url }) {
+  const head = 'Feedback on your update';
 
   return build({
     subject:   `${head}: ${task.title}`,
     heading:   head,
-    introLine: `${reviewerName} ${verb} your submission.`,
+    introLine: `${reviewerName} left feedback on your submission.`,
     rows: [
       { label: 'Task',     value: task.title },
       { label: 'Reviewer', value: reviewerName },

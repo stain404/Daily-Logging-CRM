@@ -167,14 +167,10 @@ router.get('/stats/summary', protect, async (req, res) => {
     const todayStr = orgToday();
     const weekAgo  = orgDaysAgo(7);
 
-    const [total, todayCount, weekCount, pendingReviews, byStatus] = await Promise.all([
+    const [total, todayCount, weekCount, byStatus] = await Promise.all([
       Task.countDocuments(query),
       Task.countDocuments({ ...query, date: todayStr }),
       Task.countDocuments({ ...query, date: { $gte: weekAgo } }),
-      // Submitted work nobody has decided on yet — the same definition the
-      // Reviews page uses. Counted here so the dashboard can show a reviewer
-      // their queue depth without pulling 200 tasks to length-check them.
-      Task.countDocuments({ ...query, submittedAt: { $ne: null }, approved: false, rejected: false }),
       Task.aggregate([
         { $match: query },
         { $group: { _id: '$status', count: { $sum: 1 } } },
@@ -190,7 +186,6 @@ router.get('/stats/summary', protect, async (req, res) => {
         total,
         todayCount,
         weekCount,
-        pendingReviews,
         completed:      statusMap['completed']    || 0,
         inProgress:     statusMap['in-progress']  || 0,
         notStarted:     statusMap['not-started']  || 0,
@@ -216,10 +211,10 @@ router.post('/', protect, async (req, res) => {
     // task either went unlogged or got appended to the first one's
     // description, where no report could ever count it.
 
-    // Self-submitted updates always start unreviewed — approval/rating fields
-    // can only be set later by a manager/admin via the review endpoint.
+    // Self-submitted updates always start without feedback — comment/rating
+    // fields can only be set later by a manager/admin via the feedback endpoint.
     const {
-      approved, rejected, mgComment, mgRating, reviewedBy, reviewedAt, assignedBy,
+      mgComment, mgRating, reviewedBy, reviewedAt, assignedBy,
       ...safeBody
     } = req.body;
 
@@ -485,11 +480,9 @@ router.put('/:id', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'You are not authorised to edit this task.' });
     }
 
-    // Employees (and HR, who submit updates the same way) cannot alter approval
-    // status, nor move their own deadline.
+    // Employees (and HR, who submit updates the same way) cannot write their
+    // own manager feedback, nor move their own deadline.
     if (['employee', 'hr'].includes(req.user.role)) {
-      delete req.body.approved;
-      delete req.body.rejected;
       delete req.body.mgComment;
       delete req.body.mgRating;
       delete req.body.reviewedBy;
@@ -536,12 +529,18 @@ router.put('/:id', protect, async (req, res) => {
 });
 
 // ── PUT /api/tasks/:id/review ─────────────────────────────────────────
+// A manager leaves feedback on a submitted update: a comment, a 1-5 rating,
+// or both. Deliberately not a verdict — see the note on Task.reviewedBy.
 router.put('/:id/review', protect, authorize('manager', 'admin', 'superadmin'), async (req, res) => {
   try {
-    const { action, comment, rating } = req.body;
+    const { comment, rating } = req.body;
 
-    if (!['approve', 'reject', 'clarify'].includes(action)) {
-      return res.status(400).json({ success: false, message: 'Invalid review action. Must be approve, reject, or clarify.' });
+    if (!String(comment || '').trim() && !rating) {
+      return res.status(400).json({ success: false, message: 'Add a comment or a rating.' });
+    }
+    if (rating !== undefined && rating !== null && rating !== '' &&
+        !(Number(rating) >= 1 && Number(rating) <= 5)) {
+      return res.status(400).json({ success: false, message: 'Rating must be between 1 and 5.' });
     }
 
     const task = await Task.findById(req.params.id);
@@ -549,27 +548,17 @@ router.put('/:id/review', protect, authorize('manager', 'admin', 'superadmin'), 
       return res.status(404).json({ success: false, message: 'Task not found.' });
     }
 
-    // Nothing is reviewable until the employee has reported against it.
-    // Approving an untouched assignment used to be one click away in the task
-    // list, which quietly marked work done that nobody had started.
+    // There is nothing to give feedback on until the employee has reported
+    // against the task — an untouched assignment has no work to comment on.
     if (!task.submittedAt) {
       return res.status(400).json({
         success: false,
-        message: 'This task has not been submitted yet. It can be reviewed once the employee sends their daily update.',
+        message: 'This task has not been submitted yet. You can leave feedback once the employee sends their daily update.',
       });
     }
 
-    if (action === 'approve') {
-      task.approved   = true;
-      task.rejected   = false;
-    } else if (action === 'reject') {
-      task.rejected   = true;
-      task.approved   = false;
-    }
-    // 'clarify' only sets a comment — does not change approval state
-
-    task.mgComment  = comment  || (action === 'approve' ? 'Approved' : action === 'reject' ? 'Rejected' : '');
-    task.mgRating   = rating   || null;
+    task.mgComment  = String(comment || '').trim();
+    task.mgRating   = rating || null;
     task.reviewedBy = req.user._id;
     task.reviewedAt = new Date();
     await task.save();
@@ -577,12 +566,12 @@ router.put('/:id/review', protect, authorize('manager', 'admin', 'superadmin'), 
     await Audit.create({
       user:     req.user._id,
       userName: req.user.name,
-      action:   `Task ${action.charAt(0).toUpperCase() + action.slice(1)}d`,
-      detail:   `"${task.title}" was ${action}d`,
+      action:   'Task Feedback',
+      detail:   `Left feedback on "${task.title}"`,
       ip:       req.ip,
     });
 
-    taskReviewed(task, req.user._id, req.user.name, action);
+    taskReviewed(task, req.user._id, req.user.name);
 
     const populated = await Task.findById(task._id)
       .populate('userId',     'name empId color initials')
@@ -595,8 +584,7 @@ router.put('/:id/review', protect, authorize('manager', 'admin', 'superadmin'), 
 });
 
 // ── PUT /api/tasks/:id/clear-review ──────────────────────────────────
-// Wipes manager feedback fields and resets approval state back to pending.
-// Only the manager/admin/superadmin who left the review (or any admin) can clear it.
+// Wipes the manager feedback fields, putting the task back to no feedback.
 router.put('/:id/clear-review', protect, authorize('manager', 'admin', 'superadmin'), async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
@@ -604,8 +592,6 @@ router.put('/:id/clear-review', protect, authorize('manager', 'admin', 'superadm
       return res.status(404).json({ success: false, message: 'Task not found.' });
     }
 
-    task.approved   = false;
-    task.rejected   = false;
     task.mgComment  = '';
     task.mgRating   = undefined;
     task.reviewedBy = undefined;
@@ -615,8 +601,8 @@ router.put('/:id/clear-review', protect, authorize('manager', 'admin', 'superadm
     await Audit.create({
       user:     req.user._id,
       userName: req.user.name,
-      action:   'Review Cleared',
-      detail:   `Cleared review/feedback for task: "${task.title}"`,
+      action:   'Feedback Cleared',
+      detail:   `Cleared feedback on task: "${task.title}"`,
       ip:       req.ip,
     });
 

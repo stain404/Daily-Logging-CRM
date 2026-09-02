@@ -49,8 +49,10 @@ const TaskSchema = new mongoose.Schema({
   challenges: { type: String, default: '' },
   support:    { type: String, default: 'No' },
   nextPlan:   { type: String, default: '' },
-  approved:   { type: Boolean, default: false },
-  rejected:   { type: Boolean, default: false },
+  // Manager feedback on a submitted update. Deliberately NOT a verdict: a
+  // daily update is a record of work already done, not something to be granted
+  // or refused, so there is no approved/rejected state for one to sit in. A
+  // manager reads the update and leaves a comment and a rating, or nothing.
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   reviewedAt: { type: Date },
   mgComment:  { type: String, default: '' },
