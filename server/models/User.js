@@ -34,6 +34,14 @@ const UserSchema = new mongoose.Schema({
   joined:     { type: Date, default: Date.now },
   lastLogin:  { type: Date },
 
+  // A capability, deliberately separate from `role`. Lets a specific person
+  // reset other people's passwords without being made an admin — the IT desk
+  // needs the reset, not the run of admin powers that comes with the role.
+  // Off by default and never exposed in the role/edit UI; set it from a script
+  // (scripts/grantResetPower.js) so it cannot be handed out by a mis-click.
+  // The reset route enforces it; the client only uses it to reveal the tool.
+  canResetPasswords: { type: Boolean, default: false },
+
   // Per-type email opt-outs. Default on, so existing rows (which have no
   // subdocument at all) read as opted in without a migration.
   //

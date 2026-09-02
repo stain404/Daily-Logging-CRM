@@ -351,6 +351,56 @@ router.put('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (req, 
   }
 });
 
+// Who is allowed to reset whom. Shared by both reset routes so the rule lives
+// in one place. Returns { ok } or { ok:false, code, message }.
+//
+// Two ways to qualify: the hr/admin/superadmin roles, OR the canResetPasswords
+// capability granted to a specific account (the IT desk, without the rest of
+// the admin role). Whichever way in, the target rules are the same:
+//   - only a superadmin can reset another superadmin (no seizing the top account)
+//   - anyone who is not admin/superadmin — HR, or a bare capability holder —
+//     is limited to employee and manager accounts, so a reset cannot be used
+//     to walk up the chain.
+function checkResetPermission(actor, target) {
+  const privileged = ['hr', 'admin', 'superadmin'].includes(actor.role);
+  const delegated  = actor.canResetPasswords === true;
+
+  if (!privileged && !delegated) {
+    return { ok: false, code: 403, message: 'You do not have permission to reset passwords.' };
+  }
+  if (target.role === 'superadmin' && actor.role !== 'superadmin') {
+    return { ok: false, code: 403, message: 'Only a superadmin can reset a superadmin password.' };
+  }
+  const limitedToStaff = !['admin', 'superadmin'].includes(actor.role);
+  if (limitedToStaff && !['employee', 'manager'].includes(target.role)) {
+    return { ok: false, code: 403, message: 'You can only reset employee or manager passwords.' };
+  }
+  return { ok: true };
+}
+
+async function applyReset(actor, target, newPassword, req) {
+  if (!newPassword || newPassword.length < 6) {
+    return { code: 400, body: { success: false, message: 'New password must be at least 6 characters.' } };
+  }
+  const perm = checkResetPermission(actor, target);
+  if (!perm.ok) return { code: perm.code, body: { success: false, message: perm.message } };
+
+  // save() so the pre-save hook hashes it — findByIdAndUpdate would store
+  // the password in plain text and login would then never match it.
+  target.password = newPassword;
+  await target.save();
+
+  await Audit.create({
+    user:     actor._id,
+    userName: actor.name,
+    action:   'Password Reset',
+    detail:   `Reset password for ${target.name} (${target.empId})`,
+    ip:       req.ip,
+  });
+
+  return { code: 200, body: { success: true, message: `Password reset for ${target.name}.` } };
+}
+
 // ── POST /api/users/:id/reset-password ────────────────────────────────
 // The way back in for someone who has forgotten their password. PUT /:id
 // strips `password` on purpose, and /auth/change-password needs the current
@@ -359,44 +409,43 @@ router.put('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (req, 
 // Deliberately not an email link: EMAIL_ENABLED is false until the sending
 // domain is verified, so a mailed reset token would silently go nowhere. An
 // admin setting the password and passing it on is what works today.
-router.post('/:id/reset-password', protect, authorize('hr', 'admin', 'superadmin'), async (req, res) => {
+//
+// No authorize() guard on the route — the check is inside applyReset, because
+// a capability holder (canResetPasswords) is allowed here too and is not a role
+// authorize() could name.
+router.post('/:id/reset-password', protect, async (req, res) => {
   try {
-    const { newPassword } = req.body;
-
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters.' });
-    }
-
     const target = await User.findById(req.params.id).select('+password');
     if (!target) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
+    const out = await applyReset(req.user, target, req.body.newPassword, req);
+    res.status(out.code).json(out.body);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-    // Resetting someone's password is taking over their account, so the rules
-    // are tighter than for editing one. Only a superadmin can reset another
-    // superadmin — otherwise an admin could seize the top account, which is
-    // the same escalation §9.3a already reports through the role field.
-    if (target.role === 'superadmin' && req.user.role !== 'superadmin') {
-      return res.status(403).json({ success: false, message: 'Only a superadmin can reset a superadmin password.' });
+// ── POST /api/users/reset-password ────────────────────────────────────
+// The same reset, but keyed by empId or username rather than a Mongo id. It
+// exists so the reset can be driven by someone who cannot browse the employee
+// directory to find an id — the delegated IT account (canResetPasswords) has
+// no Employees page. Same permission rules as the id route; the identifier is
+// resolved here and handed to the same applyReset.
+router.post('/reset-password', protect, async (req, res) => {
+  try {
+    const identifier = String(req.body.identifier || '').trim();
+    if (!identifier) {
+      return res.status(400).json({ success: false, message: 'Enter an employee ID or username.' });
     }
-    if (req.user.role === 'hr' && !['employee', 'manager'].includes(target.role)) {
-      return res.status(403).json({ success: false, message: 'HR can only reset employee or manager passwords.' });
+    const target = await User.findOne({
+      $or: [{ empId: identifier }, { username: identifier }],
+    }).select('+password');
+    if (!target) {
+      return res.status(404).json({ success: false, message: `No account with ID or username "${identifier}".` });
     }
-
-    // save() so the pre-save hook hashes it — findByIdAndUpdate would store
-    // the password in plain text and login would then never match it.
-    target.password = newPassword;
-    await target.save();
-
-    await Audit.create({
-      user:     req.user._id,
-      userName: req.user.name,
-      action:   'Password Reset',
-      detail:   `Reset password for ${target.name} (${target.empId})`,
-      ip:       req.ip,
-    });
-
-    res.json({ success: true, message: `Password reset for ${target.name}.` });
+    const out = await applyReset(req.user, target, req.body.newPassword, req);
+    res.status(out.code).json(out.body);
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

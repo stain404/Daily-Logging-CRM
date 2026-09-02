@@ -6149,6 +6149,67 @@ document.getElementById('overlay').addEventListener('click', e => { if (e.target
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeConfirm(); } });
 
 // ═══════════════════════════════════════════════════════
+//  HIDDEN PASSWORD-RESET TOOL
+// ═══════════════════════════════════════════════════════
+// A concealed panel for the IT desk. It is not in the nav and not on any page;
+// it opens on Ctrl+Shift+F9, and only for someone the server would actually
+// let reset a password — the hr/admin/superadmin roles, or the
+// canResetPasswords capability granted from scripts/grantResetPower.js.
+//
+// The trigger being discoverable in this file changes nothing: the reset route
+// enforces the same permission server-side, so a curious employee who finds the
+// shortcut opens a panel whose every submission comes back 403. This gate is
+// only so the tool stays invisible to people who have no use for it.
+function canUseResetTool() {
+  return !!CU && (CU.canResetPasswords === true || ['hr', 'admin', 'superadmin'].includes(CU.role));
+}
+
+function openResetTool() {
+  if (!canUseResetTool()) return;
+  openModal('Password Reset Tool', `
+    <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:14px">
+      Set a new password for an account by employee ID or username. The change is
+      immediate — pass the new password on to them, and have them change it under
+      <strong>Profile → Change Password</strong>.
+    </p>
+    <div class="form-group">
+      <label class="form-label">Employee ID or username</label>
+      <input class="form-input" id="prt_id" placeholder="e.g. EM014 or aashikha" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label">New password</label>
+      <input class="form-input" type="password" id="prt_new" placeholder="At least 6 characters" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Confirm new password</label>
+      <input class="form-input" type="password" id="prt_conf" placeholder="Repeat new password" autocomplete="new-password">
+    </div>
+  `, [
+    { label: 'Cancel', cls: 'btn-secondary', fn: closeModal },
+    { label: 'Reset password', cls: 'btn-primary', fn: async () => {
+        const identifier = document.getElementById('prt_id').value.trim();
+        const nw = document.getElementById('prt_new').value;
+        const cf = document.getElementById('prt_conf').value;
+        if (!identifier) { toast('Who?', 'Enter an employee ID or username.', 'error'); return; }
+        if (nw.length < 6) { toast('Too short', 'Password must be at least 6 characters.', 'error'); return; }
+        if (nw !== cf)     { toast('Passwords don\'t match', 'Please re-enter the new password.', 'error'); return; }
+        try {
+          const r = await POST('/users/reset-password', { identifier, newPassword: nw });
+          closeModal();
+          toast('Password reset', r.message || 'Done.', 'success');
+        } catch (e) { toast('Reset failed', e.message, 'error'); }
+    }},
+  ]);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.shiftKey && (e.key === 'F9' || e.code === 'F9')) {
+    e.preventDefault();
+    openResetTool();
+  }
+});
+
+// ═══════════════════════════════════════════════════════
 //  CONFIRM DIALOG
 // ═══════════════════════════════════════════════════════
 function openConfirm(title, msg, onOk, okCls = 'btn-danger') {
