@@ -225,10 +225,17 @@
       flex-shrink: 0;
     }
     .sb-logo-mark {
-      width: 40px; height: 40px;   /* no tile — see .login-mark */
+      width: 48px; height: 48px;   /* no tile — see .login-mark */
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
+    /* The mark is a dark navy body held together by thin neon edges. At the
+       96px of the login screen those edges carry it on any ground; at sidebar
+       size they are a pixel wide and the body sinks into the rail, which is
+       #0a0d12 and never lightens in either theme. Lifting it here beats the
+       alternatives: a white tile is a bright block in a dark rail, and a glow
+       reads as a blur. Scoped to this mark — the login one needs none. */
+    .sb-logo-mark img { filter: brightness(1.55) saturate(1.15); }
     .sb-logo-text { min-width: 0; }
     .sb-logo-name { font-size: 13px; font-weight: 700; color: var(--sidebar-text); letter-spacing: -.02em; font-family: var(--font-mono); }
     .sb-logo-sub  { font-size: 10px; color: var(--sidebar-text-faint); margin-top: 1px; letter-spacing: .5px; text-transform: uppercase; }
