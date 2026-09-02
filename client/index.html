@@ -225,15 +225,9 @@
       flex-shrink: 0;
     }
     .sb-logo-mark {
-      width: 34px; height: 34px;
-      /* --sidebar-hover is dark in both themes (the sidebar never lightens),
-         so unlike .login-mark this needs no override. */
-      background: var(--sidebar-hover);
-      border: 1px solid rgba(255, 255, 255, .1);   /* see .login-mark */
-      border-radius: var(--radius);
+      width: 40px; height: 40px;   /* no tile — see .login-mark */
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
-      overflow: hidden;
     }
     .sb-logo-text { min-width: 0; }
     .sb-logo-name { font-size: 13px; font-weight: 700; color: var(--sidebar-text); letter-spacing: -.02em; font-family: var(--font-mono); }
@@ -495,25 +489,14 @@
       box-shadow: var(--shadow-xl);
     }
     .login-head { margin-bottom: 32px; }
+    /* No tile behind the mark, in either theme. It is a cutout with bright
+       neon edges and a dark navy body, so it holds its shape on the dark
+       panel and on paper without help — and a chip only shrank it, since the
+       logo then had to fit inside the tile's padding rather than the box. */
     .login-mark {
-      /* Bigger than the 48px the old glyph sat in: this mark carries real
-         detail — nested chevrons and a centre diamond — and at 48 it collapses
-         into a smudge. The login screen is the one place with room for it. */
-      width: 64px; height: 64px;
-      /* Fixed dark ground rather than var(--bg-panel-2). The mark is a neon
-         design drawn on black — over half its opaque pixels are near-black —
-         so on the light theme's pale panel it reads as a dark smudge with a
-         glow around it. Giving it the ground it was drawn for keeps it
-         legible in both themes and looks deliberate rather than pasted on. */
-      background: #0a0d13;
-      /* Not --accent-dim: the mark is already loud pink-to-cyan, and ringing
-         it in the accent pink puts two competing brand colours 2px apart. A
-         neutral hairline lets the logo be the colour. */
-      border: 1px solid rgba(255, 255, 255, .1);
-      border-radius: var(--radius-lg);
+      width: 96px; height: 96px;
       display: flex; align-items: center; justify-content: center;
-      margin-bottom: 16px;
-      overflow: hidden;
+      margin-bottom: 18px;
     }
     .login-mark img, .sb-logo-mark img {
       width: 100%; height: 100%;
@@ -1652,7 +1635,7 @@
   <div class="login-box">
     <div class="login-head">
       <div class="login-mark">
-        <img src="logo-alquba.png" alt="Al Quba" width="128" height="128">
+        <img src="logo-alquba.png" alt="Al Quba" width="198" height="256">
       </div>
       <div class="login-title">Al Quba</div>
       <div class="login-sub">Internal Management System</div>
@@ -1698,7 +1681,7 @@
       <div class="grain-gradient" aria-hidden="true"></div>
       <div class="sb-logo">
         <div class="sb-logo-mark">
-          <img src="logo-alquba.png" alt="" width="128" height="128">
+          <img src="logo-alquba.png" alt="" width="198" height="256">
         </div>
         <div class="sb-logo-text">
           <div class="sb-logo-name">Al Quba</div>
