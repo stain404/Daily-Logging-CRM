@@ -26,6 +26,13 @@ const DECIDER_ROLE  = 'superadmin';
 const canPropose = role => role === PROPOSER_ROLE;
 const canDecide  = role => role === DECIDER_ROLE;
 
+// The CEO is the approver, so routing his own additions and removals through
+// a queue only he can clear is theatre — he would approve his own request one
+// click later, and in the meantime his Employees page has fewer actions on it
+// than HR's, which reads as a bug rather than as a policy. He acts directly;
+// admin still has neither path, which is what keeps the flow meaningful.
+const canActDirectly = role => role === DECIDER_ROLE;
+
 // Role-specific refusal text. A generic 403 here reads as a bug to the CEO —
 // he is the most senior user in the system and has just been told no.
 function denialMessage(role, what) {
@@ -210,7 +217,7 @@ async function hashPassword(plain) {
 
 module.exports = {
   PROPOSER_ROLE, DECIDER_ROLE,
-  canPropose, canDecide, denyAddRemove, denialMessage,
+  canPropose, canDecide, canActDirectly, denyAddRemove, denialMessage,
   submitRequest, pendingResponse, applyRequest, hashPassword,
   describeUserCreate, describeUserRemoval,
   pendingUserCreateClash, pendingTargetRequest,

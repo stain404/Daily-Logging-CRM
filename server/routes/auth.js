@@ -17,20 +17,36 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please provide a username and password.' });
     }
 
-    // Accept login by username OR empId
-    const user = await User.findOne({
-      $or: [
-        { username: username.toLowerCase() },
-        { empId: username.toUpperCase() },
-      ],
-      active: true,
-    })
+    // Accept login by username OR employee ID. Looked up in that order rather
+    // than as one $or: the two namespaces are separate and can collide — one
+    // person's username can be another person's employee ID — and $or would
+    // hand back whichever document Mongo reached first. What someone typed is
+    // their own username if such a username exists; only then is it read as an
+    // employee ID.
+    const identifier = String(username).trim();
+
+    const find = where => User.findOne({ ...where, active: true })
       .select('+password')
       .populate('department', 'name color')
       .populate('team',       'name')
       .populate('manager',    'name empId designation');
 
-    if (!user || !(await user.matchPassword(password))) {
+    // Both candidates, username first, and whichever one the password actually
+    // belongs to wins. Trying them in order rather than as one $or is what
+    // makes a collision resolvable at all: with $or, Mongo returned whichever
+    // document it reached first, so the person whose username it was could be
+    // told their own credentials were invalid.
+    const candidates = [
+      await find({ username: identifier.toLowerCase() }),
+      await find({ empId:    identifier.toUpperCase() }),
+    ].filter(Boolean);
+
+    let user = null;
+    for (const candidate of candidates) {
+      if (await candidate.matchPassword(password)) { user = candidate; break; }
+    }
+
+    if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid username or password.' });
     }
 

@@ -4,7 +4,21 @@ const ChangeRequest = require('../models/ChangeRequest');
 const Audit         = require('../models/Audit');
 const { protect }   = require('../middleware/auth');
 const { notify }    = require('../services/notify');
-const { canDecide, applyRequest } = require('../services/changeRequests');
+const { canDecide, canPropose, applyRequest } = require('../services/changeRequests');
+
+// Reading the queue at all is for the two roles the flow is made of: HR, who
+// raises requests, and the CEO, who decides them. A manager or an admin has no
+// part in it, and handing them the page — even an empty, unapprovable one —
+// advertises an action they cannot take on a subject they do not own.
+function queueRoles(req, res, next) {
+  if (!canDecide(req.user.role) && !canPropose(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Approvals are raised by HR and decided by the CEO.',
+    });
+  }
+  next();
+}
 
 // The CEO's approval queue. HR raises requests through the ordinary
 // users/teams/departments routes; this router is only for reading and
@@ -14,7 +28,7 @@ const { canDecide, applyRequest } = require('../services/changeRequests');
 // The CEO sees everything. Anyone else sees only what they raised — HR needs
 // to know whether their request went through, and nobody else has any
 // business reading the queue at all.
-router.get('/', protect, async (req, res) => {
+router.get('/', protect, queueRoles, async (req, res) => {
   try {
     const { status } = req.query;
     const query = canDecide(req.user.role) ? {} : { requestedBy: req.user._id };
@@ -34,7 +48,7 @@ router.get('/', protect, async (req, res) => {
 
 // ── GET /api/change-requests/pending-count ───────────────────────────
 // Drives the badge in the sidebar. Same scoping rule as the list.
-router.get('/pending-count', protect, async (req, res) => {
+router.get('/pending-count', protect, queueRoles, async (req, res) => {
   try {
     const query = { status: 'pending' };
     if (!canDecide(req.user.role)) query.requestedBy = req.user._id;

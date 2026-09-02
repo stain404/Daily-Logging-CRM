@@ -4,17 +4,26 @@ const User    = require('../models/User');
 const Task    = require('../models/Task');
 const Audit   = require('../models/Audit');
 const { protect, authorize } = require('../middleware/auth');
+const { visibleUserIds } = require('../utils/scope');
 const { REVIEW_ROLES } = require('../services/mailer');
 const {
-  canPropose, denyAddRemove, submitRequest, pendingResponse, hashPassword,
+  canPropose, canActDirectly, denyAddRemove, submitRequest, pendingResponse, hashPassword,
   describeUserCreate, describeUserRemoval, pendingUserCreateClash, pendingTargetRequest,
 } = require('../services/changeRequests');
 
 // ── GET /api/users ────────────────────────────────────────────────────
+// HR, admin and the CEO read the whole directory — that is already true of
+// every other screen they have. A manager does not: their remit is the people
+// they manage, and handing them the full roster is what made the Employees
+// export, the report filters and the recipient pickers all list the entire
+// company. Scoped in utils/scope.js, once, so no route can quietly disagree.
 router.get('/', protect, authorize('hr', 'manager', 'admin', 'superadmin'), async (req, res) => {
   try {
     const { role, dept, active, search } = req.query;
     const query = {};
+
+    const scope = await visibleUserIds(req.user);
+    if (scope) query._id = { $in: scope };
 
     if (role)   query.role = role;
     if (dept)   query.department = dept;
@@ -114,6 +123,11 @@ router.put('/me/notification-prefs', protect, async (req, res) => {
 // ── GET /api/users/:id ────────────────────────────────────────────────
 router.get('/:id', protect, authorize('hr', 'manager', 'admin', 'superadmin'), async (req, res) => {
   try {
+    const scope = await visibleUserIds(req.user);
+    if (scope && !scope.includes(String(req.params.id))) {
+      return res.status(403).json({ success: false, message: 'You can only view people you manage.' });
+    }
+
     const user = await User.findById(req.params.id)
       .populate('department', 'name color')
       .populate('team',       'name')
@@ -132,6 +146,11 @@ router.get('/:id', protect, authorize('hr', 'manager', 'admin', 'superadmin'), a
 // ── GET /api/users/:id/stats ──────────────────────────────────────────
 router.get('/:id/stats', protect, authorize('hr', 'manager', 'admin', 'superadmin'), async (req, res) => {
   try {
+    const scope = await visibleUserIds(req.user);
+    if (scope && !scope.includes(String(req.params.id))) {
+      return res.status(403).json({ success: false, message: 'You can only view people you manage.' });
+    }
+
     const tasks      = await Task.find({ userId: req.params.id });
     const total      = tasks.length;
     const completed  = tasks.filter(t => t.status === 'completed').length;
@@ -151,15 +170,19 @@ router.get('/:id/stats', protect, authorize('hr', 'manager', 'admin', 'superadmi
 });
 
 // ── POST /api/users ────────────────────────────────────────────────────
-// Adding a person no longer creates anything. HR raises the request, the CEO
-// approves it, and only then does the account exist — so the new hire cannot
-// log in until that happens. See services/changeRequests.js.
+// When HR raises this, adding a person creates nothing: the CEO approves it,
+// and only then does the account exist — so the new hire cannot log in until
+// that happens. The CEO himself is the approver, so his own add lands straight
+// away. See services/changeRequests.js.
 router.post('/', protect, authorize('hr', 'admin', 'superadmin'), async (req, res) => {
   try {
-    if (!canPropose(req.user.role)) return denyAddRemove(req, res, 'people');
+    const direct = canActDirectly(req.user.role);
+    if (!direct && !canPropose(req.user.role)) return denyAddRemove(req, res, 'people');
 
     // HR can only create employee/manager accounts — not admin, superadmin, or hr.
-    if (!['employee', 'manager'].includes(req.body.role || 'employee')) {
+    // The CEO is not held to that: granting a privileged role is his call alone
+    // and PUT /:id already says so.
+    if (!direct && !['employee', 'manager'].includes(req.body.role || 'employee')) {
       return res.status(403).json({ success: false, message: 'HR can only create employee or manager accounts.' });
     }
 
@@ -194,6 +217,22 @@ router.post('/', protect, authorize('hr', 'admin', 'superadmin'), async (req, re
         success: false,
         message: 'That employee ID or username is already waiting for the CEO to approve.',
       });
+    }
+
+    // Nothing to approve — he is the approver.
+    if (direct) {
+      const created = await User.create({ ...req.body, empId: normEmpId, username: normUser });
+      await Audit.create({
+        user:     req.user._id,
+        userName: req.user.name,
+        action:   'User Created',
+        detail:   `Created user: ${created.name} (${created.empId})`,
+        ip:       req.ip,
+      });
+      const user = await User.findById(created._id)
+        .populate('department', 'name color')
+        .populate('team',       'name');
+      return res.status(201).json({ success: true, user });
     }
 
     const request = await submitRequest(req, {
@@ -255,20 +294,27 @@ router.put('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (req, 
       delete updateData.active;
 
       if (wanted !== target.active) {
-        if (!canPropose(req.user.role)) return denyAddRemove(req, res, 'people');
+        const direct = canActDirectly(req.user.role);
+        if (!direct && !canPropose(req.user.role)) return denyAddRemove(req, res, 'people');
         if (target.role === 'superadmin') {
           return res.status(403).json({ success: false, message: 'The CEO account cannot be deactivated.' });
         }
-        if (await pendingTargetRequest('user', target._id)) {
-          return res.status(400).json({ success: false, message: 'This account already has a change waiting for the CEO.' });
-        }
+        if (direct) {
+          // Put it straight back on the update — the CEO's decision is the
+          // decision, and there is nobody above him to wait for.
+          updateData.active = wanted;
+        } else {
+          if (await pendingTargetRequest('user', target._id)) {
+            return res.status(400).json({ success: false, message: 'This account already has a change waiting for the CEO.' });
+          }
 
-        const action = wanted ? 'reactivate' : 'deactivate';
-        pendingRequest = await submitRequest(req, {
-          entity: 'user', action, target: target._id,
-          targetLabel: `${target.name} (${target.empId})`,
-          summary: describeUserRemoval(target, action),
-        });
+          const action = wanted ? 'reactivate' : 'deactivate';
+          pendingRequest = await submitRequest(req, {
+            entity: 'user', action, target: target._id,
+            targetLabel: `${target.name} (${target.empId})`,
+            summary: describeUserRemoval(target, action),
+          });
+        }
       }
     }
 
@@ -363,7 +409,8 @@ router.post('/:id/reset-password', protect, authorize('hr', 'admin', 'superadmin
 // should never be one click by one person.
 router.delete('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (req, res) => {
   try {
-    if (!canPropose(req.user.role)) return denyAddRemove(req, res, 'people');
+    const direct = canActDirectly(req.user.role);
+    if (!direct && !canPropose(req.user.role)) return denyAddRemove(req, res, 'people');
 
     if (req.params.id === req.user._id.toString()) {
       return res.status(400).json({ success: false, message: 'You cannot delete your own account.' });
@@ -373,9 +420,22 @@ router.delete('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (re
     if (!target) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
-    if (!['employee', 'manager'].includes(target.role)) {
+    if (!direct && !['employee', 'manager'].includes(target.role)) {
       return res.status(403).json({ success: false, message: 'HR can only remove employee or manager accounts.' });
     }
+
+    if (direct) {
+      await User.findByIdAndDelete(target._id);
+      await Audit.create({
+        user:     req.user._id,
+        userName: req.user.name,
+        action:   'User Deleted',
+        detail:   `Deleted user: ${target.name} (${target.empId})`,
+        ip:       req.ip,
+      });
+      return res.json({ success: true, message: `${target.name} has been deleted.` });
+    }
+
     if (await pendingTargetRequest('user', target._id)) {
       return res.status(400).json({ success: false, message: 'This account already has a change waiting for the CEO.' });
     }

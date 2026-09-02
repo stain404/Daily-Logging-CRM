@@ -20,6 +20,11 @@ const NotificationSchema = new mongoose.Schema({
   task:  { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
   actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
+  // The file a 'file-shared' notification is about. Without it, clicking one
+  // could only drop the reader on the Files page to go hunting for the row —
+  // and a direct send has no task to fall back on at all.
+  attachment: { type: mongoose.Schema.Types.ObjectId, ref: 'Attachment' },
+
   // Drives the accent colour on the client
   severity: {
     type: String,

@@ -127,6 +127,34 @@ async function presignDownload(key, filename) {
   return getSignedUrl(s3(), cmd, { expiresIn: URL_TTL });
 }
 
+// Types that may be rendered in the browser instead of saved to disk.
+// Deliberately much narrower than ALLOWED: an inline response is served from
+// the bucket's own origin, so anything the browser will execute as a document
+// — HTML, SVG — must never appear here. Images and PDF only, and PDF because
+// every current browser renders it in a sandboxed viewer rather than as a
+// document on the origin.
+const PREVIEWABLE = ['image/jpeg', 'image/png', 'application/pdf'];
+
+const canPreview = mimeType => PREVIEWABLE.includes(mimeType);
+
+// Same short-lived credential as presignDownload, but rendered in place. Only
+// ever called after canPreview() — see routes/attachments.js.
+async function presignPreview(key, filename, mimeType) {
+  const { GetObjectCommand } = require('@aws-sdk/client-s3');
+  const { getSignedUrl }     = require('@aws-sdk/s3-request-presigner');
+
+  const cmd = new GetObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    ResponseContentDisposition: `inline; filename="${filename.replace(/"/g, '')}"`,
+    // Pinned rather than trusted from the stored object: S3 echoes whatever
+    // Content-Type was set at upload, and a wrong one is how an inline
+    // response turns into an executable document.
+    ResponseContentType: mimeType,
+  });
+  return getSignedUrl(s3(), cmd, { expiresIn: URL_TTL });
+}
+
 async function remove(key) {
   const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
   return s3().send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
@@ -134,6 +162,7 @@ async function remove(key) {
 
 module.exports = {
   ENABLED, BUCKET, REGION, MAX_MB, MAX_BYTES, URL_TTL,
-  ALLOWED, ALLOWED_EXT_LIST,
-  validate, buildKey, presignUpload, head, presignDownload, remove,
+  ALLOWED, ALLOWED_EXT_LIST, PREVIEWABLE,
+  validate, canPreview, buildKey, presignUpload, head,
+  presignDownload, presignPreview, remove,
 };

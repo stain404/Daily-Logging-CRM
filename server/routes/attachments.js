@@ -8,6 +8,7 @@ const Audit      = require('../models/Audit');
 const storage    = require('../services/storage');
 const { fileShared, supervisorsOf } = require('../services/notify');
 const { protect, authorize } = require('../middleware/auth');
+const { managedUserIds } = require('../utils/scope');
 
 const PRIV = ['admin', 'superadmin'];
 
@@ -81,8 +82,7 @@ async function allowedRecipients(user) {
 
   // A manager can also send down to the people they oversee.
   if (user.role === 'manager') {
-    const teams = await Team.find({ manager: user._id }).select('members');
-    teams.forEach(t => (t.members || []).forEach(m => ids.add(m.toString())));
+    (await managedUserIds(user)).forEach(id => ids.add(id));
   }
 
   const reachable = await User.find({
@@ -125,6 +125,9 @@ router.get('/config', protect, (req, res) => {
       maxMb:        storage.MAX_MB,
       allowedTypes: Object.keys(storage.ALLOWED),
       allowedExts:  storage.ALLOWED_EXT_LIST,
+      // So the client only offers Preview on rows it will actually get a URL
+      // for, instead of finding out with a 415.
+      previewTypes: storage.PREVIEWABLE,
       // Surfaced so the UI can be honest about it rather than implying files
       // have been checked for malware when they have not.
       virusScanning: false,
@@ -138,7 +141,7 @@ router.get('/config', protect, (req, res) => {
 // server.
 router.post('/upload-url', protect, requireStorage, async (req, res) => {
   try {
-    const { filename, mimeType, size, kind, taskId, recipients, note } = req.body;
+    const { filename, mimeType, size, kind, taskId, recipients, note, project } = req.body;
 
     if (!['task-attachment', 'direct-message'].includes(kind)) {
       return res.status(400).json({ success: false, message: 'kind must be task-attachment or direct-message.' });
@@ -167,6 +170,17 @@ router.post('/upload-url', protect, requireStorage, async (req, res) => {
       if (!recipientIds.length) {
         return res.status(400).json({ success: false, message: 'Select at least one recipient.' });
       }
+      // A direct send may also name the task it is about. Same access rule as
+      // attaching to one, because that is effectively what it does — the file
+      // then shows on the task's Files tab for the whole review chain.
+      if (taskId) {
+        const task = await Task.findById(taskId).select('userId');
+        if (!task) return res.status(404).json({ success: false, message: 'Task not found.' });
+        const allowed = await canAccess(req.user, { task: task._id, recipients: [], uploadedBy: null });
+        if (!allowed) {
+          return res.status(403).json({ success: false, message: 'You do not have access to that task.' });
+        }
+      }
       // Recipients must be real, active, and someone this sender is actually
       // allowed to reach. Checked here and not only in the picker — the picker
       // is a convenience, this is the rule.
@@ -187,7 +201,10 @@ router.post('/upload-url', protect, requireStorage, async (req, res) => {
       size: Number(size) || 0,
       uploadedBy: req.user._id,
       recipients: recipientIds,
-      task: kind === 'task-attachment' ? taskId : undefined,
+      // Either kind can carry a task now: an attachment is always on one, and
+      // a direct send optionally names one.
+      task: taskId || undefined,
+      project: (project || '').trim().slice(0, 120),
       note: (note || '').slice(0, 500),
       kind,
       status: 'uploading',
@@ -295,11 +312,11 @@ router.get('/inbox', protect, async (req, res) => {
     const [received, sent] = await Promise.all([
       Attachment.find({ recipients: me, status: 'ready' })
         .populate('uploadedBy', 'name empId color initials')
-        .populate('task', 'title')
+        .populate('task', 'title project')
         .sort({ createdAt: -1 }).limit(200),
       Attachment.find({ uploadedBy: me, status: 'ready' })
         .populate('recipients', 'name empId')
-        .populate('task', 'title')
+        .populate('task', 'title project')
         .sort({ createdAt: -1 }).limit(200),
     ]);
 
@@ -341,6 +358,49 @@ router.get('/:id/download', protect, async (req, res) => {
     });
 
     res.json({ success: true, url, filename: att.filename, expiresIn: storage.URL_TTL });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── GET /api/attachments/:id/preview ──────────────────────────────────
+// A look before you commit to downloading it. Same authorisation as the
+// download, and the same short-lived presigned URL — the difference is only
+// the disposition, and that only a narrow set of types is allowed to use it
+// (see services/storage.js). Anything else answers 415 and the client offers
+// the download instead of a broken frame.
+router.get('/:id/preview', protect, async (req, res) => {
+  try {
+    const att = await Attachment.findById(req.params.id);
+    if (!att || att.status !== 'ready') {
+      return res.status(404).json({ success: false, message: 'File not found.' });
+    }
+
+    // Authorisation before the storage check, as with the download below.
+    if (!(await canAccess(req.user, att))) {
+      return res.status(403).json({ success: false, message: 'You do not have access to this file.' });
+    }
+
+    if (!storage.ENABLED) {
+      return res.status(503).json({ success: false, message: 'File storage is not configured on this server.' });
+    }
+    if (!storage.canPreview(att.mimeType)) {
+      return res.status(415).json({
+        success: false,
+        message: 'This file type cannot be previewed. Download it instead.',
+      });
+    }
+
+    const url = await storage.presignPreview(att.storageKey, att.filename, att.mimeType);
+
+    // Not audited. A preview is a read the download endpoint already covers if
+    // they go on to take the file, and logging every hover would bury the
+    // entries that matter.
+    res.json({
+      success: true, url,
+      filename: att.filename, mimeType: att.mimeType, size: att.size,
+      expiresIn: storage.URL_TTL,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

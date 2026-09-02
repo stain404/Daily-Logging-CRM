@@ -31,6 +31,15 @@ const AttachmentSchema = new mongoose.Schema({
   recipients: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
   task: { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
+
+  // What the file is about, for a send that is not tied to one task. A
+  // recipient opening their inbox otherwise sees a filename and a sender and
+  // has to guess which piece of work it belongs to. Free text matching the
+  // names in GET /api/tasks/projects — there is no Projects collection to
+  // reference, and inventing one to hold a label would be heavier than the
+  // label is worth.
+  project: { type: String, default: '', trim: true },
+
   note: { type: String, default: '', trim: true, maxlength: 500 },
 
   kind: {

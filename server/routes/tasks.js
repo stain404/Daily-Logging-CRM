@@ -3,10 +3,12 @@ const router  = express.Router();
 const Task    = require('../models/Task');
 const Team    = require('../models/Team');
 const Audit   = require('../models/Audit');
+const Attachment = require('../models/Attachment');
 const { protect, authorize } = require('../middleware/auth');
 const User    = require('../models/User');
 const { taskAssigned, taskSubmitted, taskReviewed, dailyUpdateSubmitted } = require('../services/notify');
 const { orgToday, orgDaysAgo, orgTimeToDate } = require('../utils/orgTime');
+const { managedUserIds } = require('../utils/scope');
 
 // ── Helper: is this task past its deadline right now? ────────────────
 // Falls back to date + endTime for rows created before dueDate existed. The
@@ -25,9 +27,7 @@ async function getTaskQuery(user) {
     return {};
   }
   if (user.role === 'manager') {
-    const teams     = await Team.find({ manager: user._id });
-    const memberIds = teams.flatMap(t => t.members);
-    return { userId: { $in: memberIds } };
+    return { userId: { $in: await managedUserIds(user) } };
   }
   // employee — own tasks only
   return { userId: user._id };
@@ -106,9 +106,55 @@ router.get('/', protect, async (req, res) => {
       .populate('assignedBy', 'name')
       .sort({ date: -1, createdAt: -1 })
       .limit(Number(limit))
-      .skip((Number(page) - 1) * Number(limit));
+      .skip((Number(page) - 1) * Number(limit))
+      // Plain objects, so the attachment names below can be hung off each row
+      // (they are not a schema field, and Mongoose would drop them).
+      .lean();
+
+    // A count alone forced the review card to say "1 attachment", which tells a
+    // reviewer nothing about whether the right file is on the update. The names
+    // are cheap — one query for the whole page, only for rows that have any —
+    // and they are what a reviewer is actually looking for.
+    const withFiles = tasks.filter(t => t.attachmentCount > 0).map(t => t._id);
+    if (withFiles.length) {
+      const files = await Attachment.find({ task: { $in: withFiles }, status: 'ready' })
+        .select('task filename size')
+        .sort({ createdAt: 1 });
+
+      const byTask = new Map();
+      files.forEach(f => {
+        const key = String(f.task);
+        if (!byTask.has(key)) byTask.set(key, []);
+        byTask.get(key).push({ _id: f._id, filename: f.filename, size: f.size });
+      });
+
+      tasks.forEach(t => { t.attachments = byTask.get(String(t._id)) || []; });
+    }
 
     res.json({ success: true, count: tasks.length, total, page: Number(page), tasks });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── GET /api/tasks/projects ──────────────────────────────────────────
+// The project pickers' source of truth. There is no Projects collection: the
+// list is every distinct name already in use, which means it bootstraps itself
+// from real data and never goes stale. Anyone may still enter a new one — the
+// dropdown offers that as an option — and it joins the list from then on.
+//
+// Deliberately NOT scoped to what the caller can see. A dropdown that omits a
+// project because you happen not to have worked on it produces two spellings
+// of the same name, which is the mess this replaces.
+//
+// Registered above GET /:id so "projects" is not parsed as an id.
+router.get('/projects', protect, async (req, res) => {
+  try {
+    const names = (await Task.distinct('project'))
+      .filter(p => p && p.trim())
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    res.json({ success: true, count: names.length, projects: names });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -121,10 +167,14 @@ router.get('/stats/summary', protect, async (req, res) => {
     const todayStr = orgToday();
     const weekAgo  = orgDaysAgo(7);
 
-    const [total, todayCount, weekCount, byStatus] = await Promise.all([
+    const [total, todayCount, weekCount, pendingReviews, byStatus] = await Promise.all([
       Task.countDocuments(query),
       Task.countDocuments({ ...query, date: todayStr }),
       Task.countDocuments({ ...query, date: { $gte: weekAgo } }),
+      // Submitted work nobody has decided on yet — the same definition the
+      // Reviews page uses. Counted here so the dashboard can show a reviewer
+      // their queue depth without pulling 200 tasks to length-check them.
+      Task.countDocuments({ ...query, submittedAt: { $ne: null }, approved: false, rejected: false }),
       Task.aggregate([
         { $match: query },
         { $group: { _id: '$status', count: { $sum: 1 } } },
@@ -140,6 +190,7 @@ router.get('/stats/summary', protect, async (req, res) => {
         total,
         todayCount,
         weekCount,
+        pendingReviews,
         completed:      statusMap['completed']    || 0,
         inProgress:     statusMap['in-progress']  || 0,
         notStarted:     statusMap['not-started']  || 0,
@@ -212,9 +263,8 @@ router.post('/assign', protect, authorize('manager', 'admin', 'superadmin'), asy
 
     // Managers may only assign tasks to members of a team they manage.
     if (req.user.role === 'manager') {
-      const teams     = await Team.find({ manager: req.user._id });
-      const memberIds = teams.flatMap(t => t.members.map(m => m.toString()));
-      if (!memberIds.includes(userId)) {
+      const memberIds = await managedUserIds(req.user);
+      if (!memberIds.includes(String(userId))) {
         return res.status(403).json({ success: false, message: 'You can only assign tasks to members of your own team.' });
       }
     }
@@ -309,6 +359,17 @@ router.post('/daily-update', protect, async (req, res) => {
 
       const completion = Math.max(0, Math.min(100, Number(e.completion) || 0));
 
+      // The form derives hours from these two, so they are what the employee
+      // actually reported and the number is only as good as they are. Kept on
+      // the row so a reviewer can see the window, not just the total.
+      const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+      if (e.startTime && !HHMM.test(e.startTime)) {
+        return res.status(400).json({ success: false, message: pos + ': start time is not a valid time.' });
+      }
+      if (e.endTime && !HHMM.test(e.endTime)) {
+        return res.status(400).json({ success: false, message: pos + ': end time is not a valid time.' });
+      }
+
       const fields = {
         description: (e.description || '').trim(),
         status:      e.status,
@@ -316,6 +377,8 @@ router.post('/daily-update', protect, async (req, res) => {
         completion,
         challenges:  (e.challenges || '').trim(),
         support:     (e.support || '').trim() || 'No',
+        ...(e.startTime ? { startTime: e.startTime } : {}),
+        ...(e.endTime   ? { endTime:   e.endTime   } : {}),
       };
 
       if (e.taskId) {

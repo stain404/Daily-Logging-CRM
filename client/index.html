@@ -479,7 +479,11 @@
       display: flex; align-items: center; justify-content: center;
       padding: 20px;
     }
-    #loginWrap > .login-box { position: relative; z-index: 1; }
+    /* The box and the footer are the two children now, so the flex centring
+       above lays them out side by side unless the axis is turned. */
+    #loginWrap { flex-direction: column; gap: 22px; }
+    #loginWrap > .login-box,
+    #loginWrap > .login-foot { position: relative; z-index: 1; }
     .login-box {
       background: var(--bg-panel);
       border: 1px solid var(--border);
@@ -500,32 +504,29 @@
     .login-mark svg { width: 24px; height: 24px; color: var(--accent-ink); }
     .login-title { font-size: 22px; font-weight: 800; color: var(--text-primary); letter-spacing: -.03em; font-family: var(--font-mono); }
     .login-sub   { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
-    .login-hint {
-      margin-top: 16px;
-      padding: 12px;
-      background: var(--bg-panel-2);
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      font-size: 11.5px; color: var(--text-muted);
-      line-height: 1.8;
+    /* "Keep me signed in" and the reset link share a line: they are the two
+       things you decide about the password you just typed, and stacking them
+       pushed the sign-in button below the fold on a laptop. */
+    .login-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+      margin: -2px 0 18px;
     }
-    .login-hint code {
-      background: var(--bg-raised);
-      color: var(--text-secondary);
-      padding: 1px 6px; border-radius: 4px;
-      font-family: var(--font-mono); font-size: 11px;
+    .login-check {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12.5px; color: var(--text-secondary);
+      cursor: pointer; user-select: none;
     }
-    .api-status { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
-    .api-status-dot { width: 7px; height: 7px; border-radius: 50%; }
-    .api-status.online  .api-status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
-    /* The glow is the lit-LED metaphor and earns its place on the dark ground.
-       On paper it has nothing to emit into and just reads as a smudge, so the
-       halo becomes a crisp containment ring instead. */
-    :root[data-theme="light"] .api-status.online .api-status-dot {
-      box-shadow: 0 0 0 2px var(--green-wash);
+    .login-check input {
+      width: 15px; height: 15px; margin: 0;
+      accent-color: var(--accent);
+      cursor: pointer; flex-shrink: 0;
     }
-    .api-status.offline .api-status-dot { background: var(--red); }
-    .api-status.checking .api-status-dot { background: var(--warn); animation: pulse 1s infinite; }
+    .login-check:hover span { color: var(--text-primary); }
+    .login-foot {
+      font-size: 11.5px; color: var(--text-faint);
+      text-align: center; max-width: 420px;
+    }
     @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
     @keyframes livePulse { 0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(255,77,94,.5); } 50% { opacity:.7; box-shadow:0 0 0 4px rgba(255,77,94,0); } }
 
@@ -700,6 +701,30 @@
       transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
     }
     .stat-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+    /* Every tile now opens the list behind its number, so it has to look and
+       behave like the control it is: a pointer, a focus ring, and Enter/Space
+       from the keyboard. The hover lift above already reads as interactive —
+       it was writing a cheque the card could not previously cash. */
+    .stat-card[role="button"] { cursor: pointer; }
+    .stat-card[role="button"]:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      border-color: var(--accent);
+    }
+    .stat-card[role="button"]:active { transform: translateY(0); }
+    .stat-go {
+      position: absolute; right: 14px; top: 16px;
+      color: var(--text-faint);
+      opacity: 0; transform: translateX(-3px);
+      transition: opacity var(--transition), transform var(--transition);
+    }
+    .stat-go svg { width: 15px; height: 15px; display: block; }
+    .stat-card[role="button"]:hover .stat-go,
+    .stat-card[role="button"]:focus-visible .stat-go { opacity: 1; transform: translateX(0); }
+    @media (prefers-reduced-motion: reduce) {
+      .stat-card, .stat-go { transition: none; }
+      .stat-card[role="button"]:hover { transform: none; }
+    }
     .stat-card::after {
       content: '';
       position: absolute; top: 0; left: 0; right: 0;
@@ -1051,6 +1076,22 @@
       transition: all var(--transition);
     }
     .notif-item:hover { background: var(--bg-panel-2); }
+    /* Each row opens what it is about, so it is a control: pointer, focus ring,
+       and a destination label that appears on hover rather than sitting on
+       every row and competing with the message itself. */
+    .notif-item[role="button"] { cursor: pointer; }
+    .notif-item[role="button"]:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+      background: var(--bg-panel-2);
+    }
+    .notif-go {
+      display: none; align-items: center; gap: 4px; margin-top: 7px;
+      font-size: 11px; font-weight: 700; color: var(--accent-ink);
+    }
+    .notif-go svg { width: 12px; height: 12px; }
+    .notif-item:hover .notif-go,
+    .notif-item:focus-visible .notif-go { display: inline-flex; }
     .notif-item.unread { border-left-color: var(--accent); }
     .notif-item:last-child { border-bottom: none; }
     .notif-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
@@ -1409,6 +1450,18 @@
        Used by the Files page and the attachments section of a task. */
     .file-row { display: flex; align-items: flex-start; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--border); }
     .file-row:last-child { border-bottom: none; }
+    /* Marks the one row a notification was about, once, on arrival. A tint
+       rather than a border so the row does not change height and shove the
+       list under the scroll position that just landed on it. */
+    .file-row-flash {
+      animation: fileFlash 2.2s ease-out;
+      border-radius: var(--radius);
+    }
+    @keyframes fileFlash {
+      0%, 45% { background: var(--accent-wash); box-shadow: 0 0 0 6px var(--accent-wash); }
+      100%    { background: transparent;        box-shadow: 0 0 0 6px transparent; }
+    }
+    @media (prefers-reduced-motion: reduce) { .file-row-flash { animation: none; background: var(--accent-wash); } }
     .file-ic { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 4px; display: flex; align-items: center; justify-content: center; background: var(--accent-wash); color: var(--accent-ink); }
     .file-ic svg { width: 15px; height: 15px; }
     .file-meta { flex: 1; min-width: 0; }
@@ -1580,11 +1633,16 @@
   <div class="grain-gradient" aria-hidden="true"></div>
   <div class="login-box">
     <div class="login-head">
+      <!-- LOGO: replace the <svg> below with the Al Quba mark. Inline it as an
+           <img src="data:image/png;base64,…"> or as raw SVG — not a file path
+           and not a CDN URL: the app ships as this one document and has to
+           keep working offline. Keep it inside .login-mark so the sizing and
+           the sidebar lockup stay in step. -->
       <div class="login-mark">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       </div>
       <div class="login-title">Al Quba</div>
-      <div class="login-sub">Daily Logging</div>
+      <div class="login-sub">Internal Management System</div>
     </div>
 
     <div class="form-group">
@@ -1605,22 +1663,18 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       <span id="lerrMsg">Invalid credentials. Please try again.</span>
     </div>
-    <button class="btn btn-primary btn-full btn-lg" id="loginBtn" onclick="doLogin()">Sign in to Al Quba</button>
-
-    <div style="text-align:center;margin-top:12px">
+    <div class="login-row">
+      <label class="login-check">
+        <input type="checkbox" id="lkeep" checked>
+        <span>Keep me signed in</span>
+      </label>
       <button type="button" class="link-btn" onclick="forgotPasswordModal()">Forgot your password?</button>
     </div>
 
-    <div class="login-hint">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <strong>API Status:</strong>
-        <span class="api-status checking" id="apiStatus">
-          <span class="api-status-dot"></span>
-          <span id="apiStatusText">Connecting…</span>
-        </span>
-      </div>
-    </div>
+    <button class="btn btn-primary btn-full btn-lg" id="loginBtn" onclick="doLogin()">Sign in to Al Quba</button>
   </div>
+
+  <div class="login-foot">© 2026 Al Quba Investment Group. All rights reserved.</div>
 </div>
 
 <!-- ─── APP ─── -->
@@ -1720,6 +1774,7 @@ const IC = {
   notifications: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
   settings:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
   plus:          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  chevronRight:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>`,
   eye:           `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
   eyeOff:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`,
   key:           `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/></svg>`,
@@ -1756,8 +1811,38 @@ const API_BASE = (window.location.hostname === 'localhost' || window.location.ho
   ? 'http://localhost:5000/api'
   : window.location.origin + '/api';
 
-let TOKEN = localStorage.getItem('tf_token') || '';
-let CU    = (() => { try { return JSON.parse(localStorage.getItem('tf_user') || 'null'); } catch(e) { return null; } })();
+// ── Where the session lives ───────────────────────────────────────────
+// "Keep me signed in" picks the store. localStorage survives closing the
+// browser; sessionStorage dies with the tab, which is what someone on a shared
+// office machine is asking for when they clear the box. Reads check both, so a
+// session started either way is found on reload — and writing to one always
+// clears the other, or an old persisted token would outlive the tab-only one
+// and silently sign the next person in.
+const SESSION_KEYS = ['tf_token', 'tf_user'];
+
+function sessionStore(persist) { return persist ? localStorage : sessionStorage; }
+
+function readSession(key) {
+  try { return localStorage.getItem(key) ?? sessionStorage.getItem(key); }
+  catch (e) { return null; }
+}
+
+function writeSession(persist, values) {
+  const keep = sessionStore(persist);
+  const drop = sessionStore(!persist);
+  try {
+    Object.entries(values).forEach(([k, v]) => { keep.setItem(k, v); drop.removeItem(k); });
+  } catch (e) { /* private mode with storage disabled — the session is in memory only */ }
+}
+
+function clearSession() {
+  SESSION_KEYS.forEach(k => {
+    try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch (e) {}
+  });
+}
+
+let TOKEN = readSession('tf_token') || '';
+let CU    = (() => { try { return JSON.parse(readSession('tf_user') || 'null'); } catch(e) { return null; } })();
 
 // ═══════════════════════════════════════════════════════
 //  THEME (light / dark)
@@ -1782,21 +1867,10 @@ function toggleTheme() {
   applyTheme(theme);
 })();
 
-// Check API health on load
-(async function checkApi() {
-  const el   = document.getElementById('apiStatus');
-  const text = document.getElementById('apiStatusText');
-  try {
-    const res = await fetch(API_BASE + '/health', { signal: AbortSignal.timeout(4000) });
-    if (res.ok) {
-      el.className = 'api-status online';
-      text.textContent = 'Connected';
-    } else throw new Error();
-  } catch {
-    el.className = 'api-status offline';
-    text.textContent = 'Offline — using demo mode';
-  }
-})();
+// The login box used to carry an "API Status: Connected" readout. It was
+// developer diagnostics on the one screen where nobody signing in could act on
+// it, and "Offline — using demo mode" was worse than nothing because there is
+// no demo mode. A failed sign-in already says what went wrong.
 
 // ═══════════════════════════════════════════════════════
 //  HTTP HELPERS
@@ -2153,8 +2227,10 @@ async function doLogin() {
     TOKEN = data.token;
     CU    = data.user;
     sessionExpiryHandled = false;   // fresh session — arm the 401 handler again
-    localStorage.setItem('tf_token', TOKEN);
-    localStorage.setItem('tf_user', JSON.stringify(CU));
+    writeSession(document.getElementById('lkeep')?.checked !== false, {
+      tf_token: TOKEN,
+      tf_user:  JSON.stringify(CU),
+    });
     document.getElementById('loginWrap').style.display = 'none';
     document.getElementById('appWrap').style.display   = 'block';
     initApp();
@@ -2178,8 +2254,7 @@ function showLoginErr(msg) {
 function doLogout(notice) {
   TOKEN = ''; CU = null;
   stopNotifPolling();
-  localStorage.removeItem('tf_token');
-  localStorage.removeItem('tf_user');
+  clearSession();
   document.getElementById('appWrap').style.display   = 'none';
   document.getElementById('loginWrap').style.display = 'flex';
   document.getElementById('lu').value = '';
@@ -2404,7 +2479,7 @@ function revealNavGroup(page) {
 // other sidebar count.
 async function refreshApprovalBadge() {
   const nav = document.getElementById('nav-approvals');
-  if (!nav) return;
+  if (!nav || !canSeeApprovals()) return;
   try {
     const { count } = await GET('/change-requests/pending-count');
     nav.querySelector('.sb-item-badge')?.remove();
@@ -2632,6 +2707,33 @@ function dashContributors(tasks) {
 // ═══════════════════════════════════════════════════════
 //  DASHBOARD
 // ═══════════════════════════════════════════════════════
+// The tiles currently on screen, with their destinations. See statCards below.
+let DASH_CARDS = [];
+
+// Filters a page should apply the next time it renders. Set by whatever is
+// navigating (a KPI tile, a notification), consumed and cleared by the page —
+// so a later manual visit to that page is not still filtered from an hour ago.
+let PAGE_FILTER = { page: null, filters: null };
+
+function goFiltered(page, filters) {
+  PAGE_FILTER = { page, filters: filters || {} };
+  sp(page);
+}
+
+function dashGo(i) {
+  const card = DASH_CARDS[i];
+  if (!card || !card.go) return;
+  goFiltered(card.go[0], card.go[1]);
+}
+
+// Called by a page as it builds, to pull the filters aimed at it (if any).
+function takeFilters(page) {
+  if (PAGE_FILTER.page !== page) return null;
+  const f = PAGE_FILTER.filters;
+  PAGE_FILTER = { page: null, filters: null };
+  return f;
+}
+
 async function rdDash() {
   const el = document.getElementById('page-dashboard');
   pageLoader(el);
@@ -2655,29 +2757,57 @@ async function rdDash() {
     // Contributors only mean something across multiple people.
     const showContrib = ['manager','admin','superadmin','hr'].includes(CU.role);
 
+    // Whoever can decide on a submission gets the queue depth. A manager opens
+    // the Reviews page from it; admin and the CEO review from Daily Work,
+    // which is where their review buttons already live.
+    const reviewer   = ['manager', 'admin', 'superadmin'].includes(CU.role);
+    const reviewPage = CU.role === 'manager' ? 'reviews' : 'daily';
+
+    // Every tile answers "which ones?" — so every tile opens the list that
+    // answers it, filtered. `go` is [page, filters]; the filters are applied to
+    // the destination page's own controls, so what lands is a normal filtered
+    // view the user can then widen or clear, not a dead end.
     const statCards = [
       // Total is not a status, so it takes the secondary accent (cyan); In Progress
       // keeps the primary accent so it matches its bar in the status breakdown.
       { label: `${scope} Total Tasks`, val: stats.total,      cls: 'stat-cyan',   icon: 'tasks',
-        meta: `${stats.weekCount} in last 7 days` },
+        meta: `${stats.weekCount} in last 7 days`,
+        go: ['tasks', {}] },
       { label: `${scope} Completed`,   val: stats.completed,  cls: 'stat-green',  icon: 'check',
-        meta: `${stats.completionRate || 0}% completion rate` },
+        meta: `${stats.completionRate || 0}% completion rate`,
+        go: ['tasks', { status: 'completed' }] },
       { label: `${scope} In Progress`, val: stats.inProgress, cls: 'stat-blue',   icon: 'activity',
-        meta: `${stats.notStarted} not started` },
+        meta: `${stats.notStarted} not started`,
+        go: ['tasks', { status: 'in-progress' }] },
       { label: `${scope} Delayed`,     val: stats.delayed,    cls: 'stat-red',    icon: 'alert',
-        meta: `${stats.onHold} on hold` },
+        meta: `${stats.onHold} on hold`,
+        go: ['tasks', { status: 'delayed' }] },
       { label: `Today's Updates`,      val: stats.todayCount, cls: 'stat-amber',  icon: 'calendar',
-        meta: fmtDate(today()) },
+        meta: fmtDate(today()),
+        go: ['tasks', { date: today() }] },
+      ...(reviewer ? [{
+        label: 'Pending Reviews', val: stats.pendingReviews || 0, cls: 'stat-purple', icon: 'reviews',
+        meta: stats.pendingReviews ? 'Waiting on you' : 'Nothing waiting',
+        go: [reviewPage, {}],
+      }] : []),
     ];
 
-    const statsHtml = `<div class="stat-grid">${statCards.map(s =>
-      `<div class="stat-card ${s.cls}">
+    const statsHtml = `<div class="stat-grid">${statCards.map((s, i) =>
+      `<div class="stat-card ${s.cls}" role="button" tabindex="0"
+            aria-label="${esc(s.label)}: ${s.val}. Opens the matching list."
+            onclick="dashGo(${i})"
+            onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();dashGo(${i})}">
+        <div class="stat-go">${IC.chevronRight}</div>
         <div class="stat-icon">${IC[s.icon]}</div>
         <div class="stat-label">${s.label}</div>
         <div class="stat-value" data-countup="${s.val}">0</div>
         <div class="stat-meta">${s.meta}</div>
       </div>`
     ).join('')}</div>`;
+
+    // Held for the click handlers rather than serialised into the markup —
+    // a filter value can contain a quote and would break out of the attribute.
+    DASH_CARDS = statCards;
 
     const recentRows = recent.length
       ? recent.map(t => `<tr>
@@ -2790,8 +2920,67 @@ async function rdDash() {
 // ═══════════════════════════════════════════════════════
 //  TASKS
 // ═══════════════════════════════════════════════════════
+// Cached for the life of the session. The project list changes when somebody
+// types a new one, which is rare enough that re-fetching it on every render of
+// every picker would be pure overhead.
+let PROJECTS = null;
+async function projectList(force) {
+  if (PROJECTS && !force) return PROJECTS;
+  try { PROJECTS = (await GET('/tasks/projects')).projects || []; }
+  catch (e) { PROJECTS = []; }
+  return PROJECTS;
+}
+
+// A project picker that can still take a name nobody has used yet. There is no
+// Projects collection to add to — the list is whatever is already in use — so
+// "New project…" reveals a text box and the name joins the list by being used.
+function projectSelect(id, current, projects, { allowAll = false } = {}) {
+  const known  = projects.includes(current);
+  const custom = !!current && !known;
+  return `
+    <select class="form-select" id="${id}" onchange="projPick('${id}')">
+      ${allowAll ? `<option value="">All Projects</option>` : `<option value="">Select a project…</option>`}
+      ${projects.map(p => `<option value="${esc(p)}" ${p === current ? 'selected' : ''}>${esc(p)}</option>`).join('')}
+      <option value="__new__" ${custom ? 'selected' : ''}>+ New project…</option>
+    </select>
+    <input class="form-input" id="${id}_new" placeholder="Name the new project"
+           value="${esc(custom ? current : '')}"
+           style="margin-top:6px;${custom ? '' : 'display:none'}">`;
+}
+
+function projPick(id) {
+  const sel = document.getElementById(id);
+  const box = document.getElementById(id + '_new');
+  if (!sel || !box) return;
+  const isNew = sel.value === '__new__';
+  box.style.display = isNew ? '' : 'none';
+  if (isNew) box.focus(); else box.value = '';
+}
+
+// The value a project picker is actually reporting, whichever half is in use.
+function projValue(id) {
+  const sel = document.getElementById(id);
+  if (!sel) return '';
+  return sel.value === '__new__'
+    ? (document.getElementById(id + '_new')?.value.trim() || '')
+    : sel.value;
+}
+
 async function rdTasks() {
   const el = document.getElementById('page-tasks');
+
+  // Who and what to offer in the two new filters. Both are scoped server-side,
+  // so a manager's Employee list is their own team and nobody else's.
+  const projects = await projectList();
+  let people = [];
+  if (CU.role !== 'employee') {
+    try {
+      const { users } = await GET('/users?active=true');
+      people = users.filter(u => ['employee', 'manager'].includes(u.role))
+                    .sort((a, b) => a.name.localeCompare(b.name));
+    } catch (e) { /* no filter is better than a broken page */ }
+  }
+
   el.innerHTML = `
     <div class="card mb">
       <div class="card-body">
@@ -2815,6 +3004,14 @@ async function rdTasks() {
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </select>
+          <select class="form-select" id="tproj" onchange="loadTasks()">
+            <option value="">All Projects</option>
+            ${projects.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}
+          </select>
+          ${people.length ? `<select class="form-select" id="temp" onchange="loadTasks()">
+            <option value="">All Employees</option>
+            ${people.map(u => `<option value="${u._id}">${esc(u.name)}</option>`).join('')}
+          </select>` : ''}
           <input class="form-input" type="date" id="tdt" onchange="loadTasks()" style="width:160px">
           <div class="filter-sep"></div>
           <button class="btn btn-secondary btn-sm" onclick="resetTaskFilters()">${IC.refresh} Reset</button>
@@ -2833,15 +3030,32 @@ async function rdTasks() {
         </table>
       </div>
     </div>`;
+  applyTaskFilters(takeFilters('tasks'));
   await loadTasks();
 }
 
+let _taskSeq = 0;
+
 function resetTaskFilters() {
-  ['tq','tst','tpr','tdt'].forEach(id => {
+  ['tq','tst','tpr','tdt','tproj','temp'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
   loadTasks();
+}
+
+// Applies filters aimed at this page by whatever navigated here — a dashboard
+// tile, a notification — to the real controls, so the user sees the filter that
+// is in force and can clear it like any other.
+function applyTaskFilters(f) {
+  if (!f) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined) el.value = v; };
+  set('tst',   f.status);
+  set('tpr',   f.priority);
+  set('tdt',   f.date);
+  set('tproj', f.project);
+  set('temp',  f.userId);
+  set('tq',    f.q);
 }
 
 async function assignTaskModal() {
@@ -2851,6 +3065,8 @@ async function assignTaskModal() {
     const myTeams = teams.filter(t => getId(t.manager) === (CU._id || CU.id));
     members = myTeams.flatMap(t => t.members);
   } catch (e) { toast('Error', e.message, 'error'); return; }
+
+  const projects = await projectList();
 
   if (!members.length) {
     toast('No team members', 'You don\'t have any team members to assign a task to yet.', 'error');
@@ -2872,7 +3088,7 @@ async function assignTaskModal() {
       <div class="form-group"><label class="form-label">Task Title <span style="color:var(--red-ink)">*</span></label>
         <input class="form-input" id="at_title" placeholder="Brief task title…"></div>
       <div class="form-group"><label class="form-label">Project <span style="color:var(--red-ink)">*</span></label>
-        <input class="form-input" id="at_proj" placeholder="Project name…"></div>
+        ${projectSelect('at_proj', '', projects)}</div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Priority</label>
@@ -2906,7 +3122,7 @@ async function assignTaskModal() {
     { label: 'Assign Task', cls: 'btn-primary', fn: async () => {
         const userId = document.getElementById('at_user').value;
         const title  = document.getElementById('at_title').value.trim();
-        const project = document.getElementById('at_proj').value.trim();
+        const project = projValue('at_proj');
         if (!userId || !title || !project) { toast('Required fields missing', 'Please fill in employee, title, and project.', 'error'); return; }
         try {
           await POST('/tasks/assign', {
@@ -2922,7 +3138,10 @@ async function assignTaskModal() {
             dueDate:     document.getElementById('at_due').value || undefined,
             description: document.getElementById('at_desc').value.trim(),
           });
-          closeModal(); toast('Task assigned', `${title} has been assigned.`, 'success'); loadTasks();
+          closeModal();
+          await projectList(true);   // a new name is now in use — refresh the pickers
+          toast('Task assigned', `${title} has been assigned.`, 'success');
+          rdTasks();
         } catch (e) { toast('Failed to assign task', e.message, 'error'); }
     }},
   ]);
@@ -2953,19 +3172,35 @@ async function loadTasks() {
   const st = document.getElementById('tst')?.value || '';
   const pr = document.getElementById('tpr')?.value || '';
   const dt = document.getElementById('tdt')?.value || '';
+  const pj = document.getElementById('tproj')?.value || '';
+  const em = document.getElementById('temp')?.value  || '';
   let path = '/tasks?limit=60';
   if (st) path += '&status=' + st;
   if (pr) path += '&priority=' + pr;
   if (dt) path += '&date=' + dt;
+  if (em) path += '&userId=' + em;
 
   const tb = document.getElementById('taskTbody');
   if (!tb) return;
 
+  // Same guard as the Employees search: typing in #tq fires one request per
+  // keystroke and the answers can come back out of order.
+  const seq = ++_taskSeq;
+
   try {
     const { tasks } = await GET(path);
-    const filtered = q
-      ? tasks.filter(t => t.title.toLowerCase().includes(q.toLowerCase()) || t.project.toLowerCase().includes(q.toLowerCase()))
+    if (seq !== _taskSeq) return;
+
+    // Project is matched here rather than server-side: it is a free-text field
+    // and an exact-match query would miss the case and spacing variants the
+    // old free-text input left behind.
+    const byProject = pj
+      ? tasks.filter(t => (t.project || '').trim().toLowerCase() === pj.trim().toLowerCase())
       : tasks;
+
+    const filtered = q
+      ? byProject.filter(t => t.title.toLowerCase().includes(q.toLowerCase()) || t.project.toLowerCase().includes(q.toLowerCase()))
+      : byProject;
 
     const cnt = document.getElementById('tcnt');
     if (cnt) cnt.textContent = `${filtered.length} record${filtered.length !== 1 ? 's' : ''}`;
@@ -3079,17 +3314,36 @@ async function viewTask(id) {
 // chosen files are held on the row too.
 
 let DU_ROWS      = [];    // entries currently on screen
+let DU_PROJECTS  = [];    // company projects, for the per-row picker
 let DU_ASSIGNED  = [];    // open tasks a manager assigned to me
 let DU_SEQ       = 0;     // row key source
 let DU_PRESELECT = null;  // task to open focused on — set by submitForTask()
 
 const DU_OTHER = '__other__';
 
+// Hours are derived from the two times rather than typed, so the number on the
+// report is the window the employee actually described. A shift that ends
+// before it starts is read as running past midnight — the alternative is a
+// negative day, and someone finishing at 01:00 is a real night shift, not a
+// typo. Rounded to the nearest quarter hour: the field used to be a 0.5 step
+// and nobody is reporting to the minute.
+function duHours(startTime, endTime) {
+  const mins = t => {
+    const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(t || '');
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  };
+  const a = mins(startTime), b = mins(endTime);
+  if (a === null || b === null) return 0;
+  const span = b >= a ? b - a : (24 * 60 - a) + b;
+  return Math.min(24, Math.round((span / 60) * 4) / 4);
+}
+
 function duBlank(taskId = '') {
   return {
     key: 'du' + (++DU_SEQ),
     taskId, title: '', project: '',
-    status: 'in-progress', completion: 0, hours: 1,
+    status: 'in-progress', completion: 0,
+    startTime: '09:00', endTime: '17:00', hours: 8,
     description: '', challenges: '', support: '',
     files: [],
   };
@@ -3101,13 +3355,19 @@ function duBlank(taskId = '') {
 // people to submit the instructions back as their own report.
 function duFromTask(t) {
   const reported = !!t.submittedAt;
+  const startTime = reported ? (t.startTime || '09:00') : '09:00';
+  const endTime   = reported ? (t.endTime   || '17:00') : '17:00';
   return {
     key: 'du' + (++DU_SEQ),
     taskId: t._id,
     title: t.title || '', project: t.project || '',
     status:     reported ? (t.status || 'in-progress') : 'in-progress',
     completion: reported ? Number(t.completion) || 0 : 0,
-    hours:      reported ? Number(t.hours) || 0 : 1,
+    startTime, endTime,
+    // The stored total wins for a row already reported on: it is what the
+    // employee's report actually said, and re-deriving it would silently
+    // rewrite history if the times were ever saved without it.
+    hours:      reported ? (Number(t.hours) || 0) : duHours(startTime, endTime),
     description: reported ? (t.description || '') : '',
     challenges:  reported ? (t.challenges || '') : '',
     support:     reported && t.support && t.support !== 'No' ? t.support : '',
@@ -3128,6 +3388,8 @@ async function rdSubmit() {
     const { tasks } = await GET('/tasks?limit=200');
     mine = tasks.filter(t => getId(t.userId) === myId);
   } catch (e) { /* an empty picker is still a usable form */ }
+
+  DU_PROJECTS = await projectList();
 
   DU_ASSIGNED = mine.filter(t => t.assignedBy && t.status !== 'completed');
 
@@ -3154,15 +3416,28 @@ function duSync() {
     if (!g('du_task_')) return;
     r.taskId      = g('du_task_').value;
     if (g('du_title_')) r.title   = g('du_title_').value.trim();
-    if (g('du_proj_'))  r.project = g('du_proj_').value.trim();
+    if (g('du_proj_'))  r.project = projValue('du_proj_' + r.key);
     r.description = g('du_desc_')?.value ?? r.description;
     r.status      = g('du_status_')?.value ?? r.status;
     r.completion  = Number(g('du_comp_')?.value ?? r.completion) || 0;
-    const h = g('du_hrs_')?.value;
-    r.hours       = h === '' || h === undefined ? 0 : Number(h) || 0;
+    r.startTime   = g('du_start_')?.value || r.startTime;
+    r.endTime     = g('du_end_')?.value   || r.endTime;
+    r.hours       = duHours(r.startTime, r.endTime);
     r.challenges  = g('du_chal_')?.value ?? r.challenges;
     r.support     = g('du_sup_')?.value ?? r.support;
   });
+}
+
+// Repaint just the derived total. A full duRender() here would tear down the
+// time input the user is still inside and drop focus mid-edit.
+function duTime(key) {
+  const start = document.getElementById('du_start_' + key)?.value;
+  const end   = document.getElementById('du_end_'   + key)?.value;
+  const out   = document.getElementById('du_hrsval_' + key);
+  const row   = DU_ROWS.find(r => r.key === key);
+  const hours = duHours(start, end);
+  if (row) { row.startTime = start; row.endTime = end; row.hours = hours; }
+  if (out) out.textContent = hours + 'h';
 }
 
 function duAdd()          { duSync(); DU_ROWS.push(duBlank()); duRender(); }
@@ -3224,7 +3499,7 @@ function duRowHtml(r, i) {
         </div>
         <div class="form-group">
           <label class="form-label">Project</label>
-          <input class="form-input" id="du_proj_${r.key}" placeholder="Optional" value="${esc(r.project)}">
+          ${projectSelect('du_proj_' + r.key, r.project, DU_PROJECTS)}
         </div>
       </div>` : ''}
 
@@ -3247,8 +3522,19 @@ function duRowHtml(r, i) {
             oninput="document.getElementById('du_compval_${r.key}').textContent=this.value+'%'">
         </div>
         <div class="form-group">
-          <label class="form-label">Hours Worked</label>
-          <input class="form-input" type="number" id="du_hrs_${r.key}" min="0" max="24" step=".5" value="${r.hours}">
+          <label class="form-label">
+            Hours Worked — <strong id="du_hrsval_${r.key}">${r.hours}h</strong>
+          </label>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input class="form-input" type="time" id="du_start_${r.key}" value="${r.startTime}"
+                   aria-label="Start time" onchange="duTime('${r.key}')" style="flex:1;min-width:0">
+            <span style="color:var(--text-muted);font-size:12px">to</span>
+            <input class="form-input" type="time" id="du_end_${r.key}" value="${r.endTime}"
+                   aria-label="End time" onchange="duTime('${r.key}')" style="flex:1;min-width:0">
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+            Worked out from the times. An end before the start counts as running past midnight.
+          </div>
         </div>
       </div>
 
@@ -3333,6 +3619,8 @@ async function duSubmit() {
       status:      r.status,
       completion:  r.completion,
       hours:       r.hours,
+      startTime:   r.startTime,
+      endTime:     r.endTime,
       challenges:  r.challenges,
       support:     r.support,
     });
@@ -3344,6 +3632,8 @@ async function duSubmit() {
 
   try {
     const { tasks } = await POST('/tasks/daily-update', { entries });
+    // A self-initiated row may have named a project nobody had used before.
+    projectList(true);
 
     // Files go up after the entries, because an attachment needs the id of the
     // task it belongs to and that id does not exist until the entry is saved.
@@ -3575,7 +3865,7 @@ async function dwLoad() {
               <td style="max-width:260px;font-size:12px;color:var(--text-secondary)">${esc((t.description || '').slice(0, 160)) || '—'}${(t.description || '').length > 160 ? '…' : ''}</td>
               <td>${sbadge(t.status)}</td>
               <td style="min-width:110px">${pbar(t.completion)}</td>
-              <td style="white-space:nowrap">${Number(t.hours) || 0}h${t.attachmentCount ? ` <span title="${t.attachmentCount} attachment${t.attachmentCount === 1 ? '' : 's'}">${IC.paperclip}</span>` : ''}</td>
+              <td style="white-space:nowrap">${Number(t.hours) || 0}h${t.attachmentCount ? ` <span title="${esc((t.attachments || []).map(f => f.filename).join(', ')) || `${t.attachmentCount} attachment${t.attachmentCount === 1 ? '' : 's'}`}">${IC.paperclip}</span>` : ''}</td>
               <td>${review}</td>
               <td><div class="tbl-actions">
                 <button class="btn btn-secondary btn-xs" onclick="viewTask('${t._id}')" title="View the full update">${IC.eye} View</button>
@@ -3607,6 +3897,30 @@ async function dwLoad() {
 // Set by reviewTask() on the task list so this page can scroll to the card
 // the manager actually clicked.
 let RV_FOCUS = null;
+
+// What is actually attached to this update, by name. "1 attachment" told a
+// reviewer nothing — not whether it is the right file, not whether it is the
+// one they asked for — so they had to open the task to find out. GET /tasks
+// carries the names now; each one downloads on click.
+function attachmentStrip(t) {
+  const files = Array.isArray(t.attachments) ? t.attachments : [];
+
+  // The row says there are files but the names did not come back (an older
+  // server, or a page that predates the change) — fall back to the count
+  // rather than hiding the fact that something is attached.
+  if (!files.length) {
+    if (!t.attachmentCount) return '';
+    return `<div style="margin:0 0 10px">
+      <button class="btn btn-secondary btn-xs" onclick="viewTask('${t._id}')">${IC.paperclip} ${t.attachmentCount} attachment${t.attachmentCount === 1 ? '' : 's'} — open update</button>
+    </div>`;
+  }
+
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px">
+    ${files.map(f => `<button class="btn btn-secondary btn-xs" title="Download ${esc(f.filename)}"
+        onclick="downloadFile('${f._id}')">${IC.paperclip} ${esc(f.filename)}
+        <span style="color:var(--text-muted);font-weight:400">${fmtBytes(f.size)}</span></button>`).join('')}
+  </div>`;
+}
 
 async function rdReviews() {
   const el = document.getElementById('page-reviews');
@@ -3659,9 +3973,7 @@ async function rdReviews() {
                   </div>
                   <div class="profile-field-label" style="margin-bottom:4px">Work Done</div>
                   <div class="review-desc">${t.description || t.desc || 'No description provided.'}</div>
-                  ${t.attachmentCount ? `<div style="margin:0 0 10px">
-                    <button class="btn btn-secondary btn-xs" onclick="viewTask('${t._id}')">${IC.paperclip} ${t.attachmentCount} attachment${t.attachmentCount === 1 ? '' : 's'} — open update</button>
-                  </div>` : ''}
+                  ${attachmentStrip(t)}
                   ${t.challenges ? `<div class="review-challenge">${IC.alert}<span>${t.challenges}</span></div>` : ''}
                   ${t.mgComment ? `<div style="padding:10px;background:var(--warn-wash);border-radius:var(--radius);border-left:3px solid var(--warn);font-size:12px;color:var(--text-primary);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span><strong>Prior comment:</strong> ${t.mgComment}</span><button class="btn btn-xs" style="background:var(--red-wash);color:var(--red-ink);flex-shrink:0" onclick="clearReview('${t._id}')" title="Delete this comment">${IC.trash} Clear</button></div>` : ''}
                   <div class="form-group">
@@ -3772,6 +4084,13 @@ async function deleteTask(id, title, refreshFn) {
 // ═══════════════════════════════════════════════════════
 //  EMPLOYEES
 // ═══════════════════════════════════════════════════════
+// HR raises additions and removals and the CEO approves them — but the CEO is
+// the approver, so he does both in one step rather than queueing a request for
+// himself. Either way the buttons belong on both their pages; without this the
+// CEO's Employees page had strictly fewer actions than HR's, which reads as a
+// permissions bug rather than as a policy.
+const canManagePeople = () => ['hr', 'superadmin'].includes(CU.role);
+
 async function rdEmployees() {
   const el = document.getElementById('page-employees');
   el.innerHTML = `
@@ -3784,7 +4103,7 @@ async function rdEmployees() {
           </div>
           <button class="btn btn-secondary btn-sm" onclick="exportUsersCSV()">${IC.download} Export CSV</button>
           <span id="ecnt" style="font-size:11px;color:var(--text-muted);margin-left:auto"></span>
-          ${CU.role === 'hr' ? `<button class="btn btn-primary btn-sm" onclick="addEmpModal()">${IC.plus} Add Employee</button>` : ''}
+          ${canManagePeople() ? `<button class="btn btn-primary btn-sm" onclick="addEmpModal()">${IC.plus} Add Employee</button>` : ''}
         </div>
       </div>
     </div>
@@ -3799,14 +4118,32 @@ async function rdEmployees() {
   await loadEmpTable();
 }
 
+// The search box fires this on every keystroke, so responses can land out of
+// order — a one-letter query's single match arriving after the cleared query's
+// full list would leave the table and the counter reporting "1 user" for a
+// directory of 37. Only the newest request is allowed to paint.
+let _empSeq = 0;
+// Held so the counter can say "3 of 37" while a search is narrowing the list,
+// rather than replacing the total with the match count and looking wrong.
+let _empTotal = null;
+
 async function loadEmpTable() {
-  const q  = document.getElementById('eq')?.value || '';
+  const q  = document.getElementById('eq')?.value.trim() || '';
   const tb = document.getElementById('empTbody');
   if (!tb) return;
+  const seq = ++_empSeq;
   try {
     const { users } = await GET('/users' + (q ? '?search=' + encodeURIComponent(q) : ''));
+    if (seq !== _empSeq) return;   // a newer search has already answered
+
+    if (!q) _empTotal = users.length;
     const cnt = document.getElementById('ecnt');
-    if (cnt) cnt.textContent = `${users.length} user${users.length !== 1 ? 's' : ''}`;
+    if (cnt) {
+      const n = users.length;
+      cnt.textContent = q && _empTotal !== null && _empTotal !== n
+        ? `${n} of ${_empTotal} employees`
+        : `${n} employee${n !== 1 ? 's' : ''}`;
+    }
     const isSA = CU.role === 'superadmin';
     const isHR = CU.role === 'hr';
     const showActionsCol = isSA || isHR;
@@ -3814,13 +4151,13 @@ async function loadEmpTable() {
       ? users.map(u => {
           const hrCanEdit = isHR && ['employee', 'manager'].includes(u.role);
           const canEdit    = isSA || hrCanEdit;
-          // Removal is HR's to propose — the CEO approves it from Approvals
-          // rather than deleting from this table.
-          const canRemove  = hrCanEdit;
+          // HR proposes a removal and the CEO approves it; the CEO removes
+          // outright, since he is the one who would be approving it.
+          const canRemove  = hrCanEdit || (isSA && u.role !== 'superadmin');
           return `<tr>
           <td><div style="display:flex;align-items:center;gap:10px">
             ${av(u, 'av-sm')}
-            <div><div style="font-weight:600;font-size:12px">${u.name}</div><div style="font-size:10px;color:var(--text-muted)">${u.email}</div></div>
+            <div><div style="font-weight:600;font-size:12px">${esc(u.name)}</div><div style="font-size:10px;color:var(--text-muted)">${esc(u.email || u.username || '—')}</div></div>
           </div></td>
           <td><span class="chip">${u.empId}</span></td>
           <td>${roleBadge(u.role)}</td>
@@ -4012,7 +4349,9 @@ function resetPwModal(id, name) {
 
 function confirmDelEmp(id, name) {
   openConfirm('Delete Employee',
-    `Remove <strong>${name}</strong>? This is sent to the CEO for approval, and their record is deleted only once he approves.`,
+    CU.role === 'superadmin'
+      ? `Remove <strong>${esc(name)}</strong>? Their record is deleted immediately and their task history is orphaned. This cannot be undone.`
+      : `Remove <strong>${esc(name)}</strong>? This is sent to the CEO for approval, and their record is deleted only once he approves.`,
     async () => {
       try {
         const r = await DELETE('/users/' + id);
@@ -4063,9 +4402,25 @@ function crDetails(r) {
   </div>`;
 }
 
+// HR raises requests and the CEO decides them. Nobody else has a part in it,
+// so nobody else gets the page — a manager or an admin who reached it saw an
+// Approve button for a queue they cannot read and cannot decide, which is a
+// promise the server was always going to refuse.
+const canSeeApprovals = () => ['hr', 'superadmin'].includes(CU?.role);
+
 async function rdApprovals() {
   const el = document.getElementById('page-approvals');
   const isCEO = CU.role === 'superadmin';
+
+  if (!canSeeApprovals()) {
+    el.innerHTML = `<div class="empty">
+      <div class="empty-icon">${IC.check}</div>
+      <div class="empty-title">Not your queue</div>
+      <div class="empty-sub">Org-chart changes are raised by HR and approved by the CEO.</div>
+    </div>`;
+    return;
+  }
+
   pageLoader(el);
   try {
     const { requests } = await GET('/change-requests');
@@ -4177,13 +4532,19 @@ async function rdTeams() {
   const el = document.getElementById('page-teams');
   pageLoader(el);
   try {
-    const { teams } = await GET('/teams');
-    const isSA = ['superadmin','admin','hr'].includes(CU.role);
+    // The server already narrows this to the teams a manager manages — the
+    // filter is kept as well so a stale build of either half still shows a
+    // manager their own team rather than the whole company's.
     const myId = CU._id || CU.id;
+    let { teams } = await GET('/teams');
+    if (CU.role === 'manager') teams = teams.filter(t => getId(t.manager) === myId);
+
+    const isSA = ['superadmin','admin','hr'].includes(CU.role);
+    const canAddTeam = ['hr', 'superadmin'].includes(CU.role);
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <div style="font-size:13px;color:var(--text-muted)">${teams.length} team${teams.length !== 1 ? 's' : ''}</div>
-        ${CU.role === 'hr' ? `<button class="btn btn-primary btn-sm" onclick="addTeamModal()">${IC.plus} Add Team</button>` : ''}
+        ${canAddTeam ? `<button class="btn btn-primary btn-sm" onclick="addTeamModal()">${IC.plus} Add Team</button>` : ''}
       </div>
       <div class="g-auto">
         ${teams.length
@@ -4219,9 +4580,11 @@ async function rdTeams() {
             }).join('')
           : `<div class="card" style="grid-column:1/-1"><div class="card-body"><div class="empty">
               <div class="empty-icon">${IC.teams}</div>
-              <div class="empty-title">No teams yet</div>
-              <div class="empty-sub">Create your first team to start organizing employees.</div>
-              ${isSA ? `<button class="btn btn-primary" onclick="addTeamModal()">${IC.plus} Create Team</button>` : ''}
+              <div class="empty-title">${CU.role === 'manager' ? 'You do not manage a team yet' : 'No teams yet'}</div>
+              <div class="empty-sub">${CU.role === 'manager'
+                ? 'Ask HR to set you as the manager of a team and it will appear here.'
+                : 'Create your first team to start organizing employees.'}</div>
+              ${canAddTeam ? `<button class="btn btn-primary" onclick="addTeamModal()">${IC.plus} Create Team</button>` : ''}
             </div></div></div>`}
       </div>`;
   } catch (e) {
@@ -4353,8 +4716,12 @@ async function manageMembersModal(id) {
           <label class="form-label">Add Member</label>
           <select class="form-select" id="mm_add">
             <option value="">Select employee…</option>
-            ${candidates.map(u => `<option value="${u._id}">${u.name} (${u.designation || u.role})</option>`).join('')}
+            ${candidates.map(u => `<option value="${u._id}">${esc(u.name)} (${esc(u.designation || u.role)})</option>`).join('')}
           </select>
+          ${!candidates.length && CU.role === 'manager' ? `<div style="font-size:11px;color:var(--text-muted);margin-top:5px">
+            Everyone you oversee is already on this team. Moving someone in from
+            elsewhere in the company is HR's to arrange.
+          </div>` : ''}
         </div>
       </div>`;
   };
@@ -4467,18 +4834,23 @@ async function rdReports() {
   const el = document.getElementById('page-reports');
   const thirtyAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
 
+  // One call for every role: /users is scoped server-side now, so a manager
+  // gets their own people from it and no longer needs to reassemble the list
+  // out of /teams — which is what left this dropdown empty whenever their
+  // team's membership rows had drifted.
   let people = [];
   try {
-    if (CU.role === 'manager') {
-      const { teams } = await GET('/teams');
-      const myTeams = teams.filter(t => getId(t.manager) === (CU._id || CU.id));
-      people = myTeams.flatMap(t => t.members);
-    } else {
-      const { users } = await GET('/users?role=employee');
-      const { users: mgrs } = await GET('/users?role=manager');
-      people = [...users, ...mgrs];
-    }
+    const { users } = await GET('/users?active=true');
+    people = users
+      .filter(u => ['employee', 'manager'].includes(u.role))
+      .sort((a, b) => a.name.localeCompare(b.name));
   } catch (e) {}
+
+  // Only offer what this role can actually fetch. The audit log is admin and
+  // CEO only on the server, so for HR and managers the button was a guaranteed
+  // 403 — an export that always fails is worse than one that isn't there.
+  const canReadAudit = ['admin', 'superadmin'].includes(CU.role);
+  const canReadDepts = ['hr', 'admin', 'superadmin'].includes(CU.role);
 
   el.innerHTML = `
     <div class="export-box mb">
@@ -4487,7 +4859,7 @@ async function rdReports() {
       <div class="export-btns">
         <button class="export-btn export-btn-white" onclick="exportTasksCSV()">${IC.download} All Tasks</button>
         <button class="export-btn export-btn-ghost" onclick="exportUsersCSV()">${IC.download} Employees</button>
-        <button class="export-btn export-btn-ghost" onclick="exportAuditCSV()">${IC.download} Audit Log</button>
+        ${canReadAudit ? `<button class="export-btn export-btn-ghost" onclick="exportAuditCSV()">${IC.download} Audit Log</button>` : ''}
         <button class="export-btn export-btn-ghost" onclick="window.print()">${IC.printer} Print Page</button>
       </div>
     </div>
@@ -4501,7 +4873,7 @@ async function rdReports() {
             <select class="form-select" id="rp_type">
               <option value="employee">By Employee</option>
               <option value="team">By Team</option>
-              <option value="department">By Department</option>
+              ${canReadDepts ? `<option value="department">By Department</option>` : ''}
               <option value="status">By Task Status</option>
             </select>
           </div>
@@ -4648,6 +5020,19 @@ async function dlReport() {
 // ═══════════════════════════════════════════════════════
 async function rdAudit() {
   const el = document.getElementById('page-audit');
+
+  // Only admin and the CEO can read it on the server. No other role gets a nav
+  // item for it, but a stale deep link or a restored session should say so
+  // rather than firing a request that is certain to come back 403.
+  if (!['admin', 'superadmin'].includes(CU.role)) {
+    el.innerHTML = `<div class="empty">
+      <div class="empty-icon">${IC.audit}</div>
+      <div class="empty-title">Not available to your role</div>
+      <div class="empty-sub">The audit log is visible to administrators and the CEO.</div>
+    </div>`;
+    return;
+  }
+
   pageLoader(el);
   try {
     const { logs, total } = await GET('/audit?limit=100');
@@ -4689,7 +5074,17 @@ let _notifsLoaded  = false;
 let _notifTimer    = null;
 const _seenNotifs  = new Set();   // every id we've already shown the user
 let _justInNotifs  = new Set();   // ids to blink on the next render
-const NOTIF_POLL_MS = 30000;
+// Every 30 seconds this used to pull the newest fifty notifications, with two
+// populates on each, for every signed-in person all day — 120 full list reads
+// an hour each to notice a bell that changes a handful of times a week.
+//
+// The tick now asks /unread-count, which is one countDocuments and no
+// documents, and only fetches the list when that number moves or the
+// notifications page is actually open. A failing tick backs off instead of
+// hammering a server that is already unhappy, which is what turned one dead
+// token into a steady stream of identical failed calls in the console.
+const NOTIF_POLL_MS     = 60000;
+const NOTIF_BACKOFF_MAX = 8 * 60000;
 
 // ── Sound ─────────────────────────────────────────────────────────────
 // Synthesised, so there's no audio asset to ship or fetch. Two stacked
@@ -4755,6 +5150,23 @@ function alertNewNotifs(fresh) {
 }
 
 // ── Fetch ─────────────────────────────────────────────────────────────
+// The cheap half of the loop. Returns true when the full list is worth
+// fetching: the unread count moved, or the user is sitting on the page and
+// expects it to be live.
+let _notifTicks = 0;
+
+async function pollNotifs() {
+  const onPage = document.getElementById('page-notifications')?.classList.contains('active');
+  // Every tenth tick regardless, so an arrival that coincides with a read
+  // elsewhere — leaving the unread total unchanged — is still picked up.
+  const due = (++_notifTicks % 10) === 0;
+  if (onPage || due || !_notifsLoaded) return loadNotifs();
+
+  const { unread } = await GET('/notifications/unread-count');
+  if (unread === _notifUnread) return true;   // nothing has changed — done
+  return loadNotifs();
+}
+
 async function loadNotifs() {
   try {
     const data  = await GET('/notifications?limit=50');
@@ -4780,7 +5192,12 @@ async function loadNotifs() {
 
     // Keep the page live if the user is sitting on it
     if (document.getElementById('page-notifications')?.classList.contains('active')) rdNotifs();
-  } catch (_) { /* offline or token expired — the next tick retries */ }
+    return true;
+  } catch (_) {
+    // Offline, or the token is gone. Reported to the scheduler so it can slow
+    // down rather than repeating the same failing call every minute.
+    return false;
+  }
 }
 
 function paintNotifBadge() {
@@ -4788,23 +5205,45 @@ function paintNotifBadge() {
   if (dot) dot.style.display = _notifUnread > 0 ? 'block' : 'none';
 }
 
+// setTimeout rather than setInterval: the delay has to grow while the server
+// is failing, and an interval cannot change its own period. Each tick queues
+// the next one only after it has finished, so a slow response can never stack
+// requests on top of each other either.
+let _notifBackoff = NOTIF_POLL_MS;
+
+function scheduleNotifPoll(delay) {
+  clearTimeout(_notifTimer);
+  _notifTimer = setTimeout(async () => {
+    let ok = true;
+    if (!document.hidden) {                 // don't poll a background tab
+      try { ok = (await pollNotifs()) !== false; } catch (_) { ok = false; }
+    }
+    _notifBackoff = ok ? NOTIF_POLL_MS : Math.min(_notifBackoff * 2, NOTIF_BACKOFF_MAX);
+    if (_notifTimer) scheduleNotifPoll(_notifBackoff);
+  }, delay);
+}
+
 function startNotifPolling() {
   stopNotifPolling();
+  _notifBackoff = NOTIF_POLL_MS;
+  _notifTimer   = -1;                       // armed, so the loop keeps itself going
   loadNotifs();
-  _notifTimer = setInterval(() => {
-    if (!document.hidden) loadNotifs();   // don't poll a background tab
-  }, NOTIF_POLL_MS);
+  scheduleNotifPoll(NOTIF_POLL_MS);
 }
 function stopNotifPolling() {
-  if (_notifTimer) clearInterval(_notifTimer);
+  if (_notifTimer) clearTimeout(_notifTimer);
   _notifTimer = null;
   _notifs = []; _notifUnread = 0; _notifsLoaded = false;
   _seenNotifs.clear();
   paintNotifBadge();
 }
-// Catch up immediately when the user comes back to the tab
+// Catch up immediately when the user comes back to the tab, and treat that as
+// a fresh start — whatever was failing while they were away may well be fixed.
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && _notifTimer) loadNotifs();
+  if (document.hidden || !_notifTimer) return;
+  _notifBackoff = NOTIF_POLL_MS;
+  loadNotifs();
+  scheduleNotifPoll(NOTIF_POLL_MS);
 });
 
 // ── Render ────────────────────────────────────────────────────────────
@@ -4843,9 +5282,13 @@ async function rdNotifs() {
       </div>
       <div>
         ${_notifs.length
-          ? _notifs.map(n => `
+          ? _notifs.map(n => {
+              const dest = notifDest(n);
+              return `
               <div class="notif-item ${n.read ? '' : 'unread'} sev-${n.severity || 'info'} ${_justInNotifs.has(n._id) ? 'just-in' : ''}"
-                   onclick="markNotifRead('${n._id}')">
+                   ${dest.run ? `role="button" tabindex="0" title="${esc(dest.label)}"` : ''}
+                   onclick="openNotif('${n._id}')"
+                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openNotif('${n._id}')}">
                 <div class="notif-head">
                   <span class="notif-title">${esc(n.title)}${
                     !n.read ? ` <span class="badge badge-blue" style="font-size:10px;vertical-align:middle">New</span>` : ''
@@ -4853,11 +5296,59 @@ async function rdNotifs() {
                   <span class="notif-time">${timeAgo(n.createdAt)}</span>
                 </div>
                 <div class="notif-msg">${esc(n.message || '')}</div>
+                ${dest.run ? `<div class="notif-go">${esc(dest.label)} ${IC.chevronRight}</div>` : ''}
                 ${n.emailed ? `<div class="notif-emailed" title="A copy of this was emailed to you">${IC.mail} Emailed to you</div>` : ''}
-              </div>`).join('')
+              </div>`;
+            }).join('')
           : `<div class="empty"><div class="empty-icon">${IC.notifications}</div><div class="empty-title">No notifications</div><div class="empty-sub">You're all caught up!</div></div>`}
       </div>
     </div>`;
+}
+
+// Where a notification leads, and what to call that in the UI. Every type has
+// somewhere to go — a bell that only marks itself read makes the reader hunt
+// for the thing it was telling them about.
+//
+// The task modal is the destination wherever a task is attached, because it is
+// the one surface that shows the work, the review and the files together.
+function notifDest(n) {
+  const taskId = getId(n.task);
+
+  if (taskId) {
+    // A reviewer being told something was submitted wants the review controls,
+    // not a read-only view — reviewTask() opens the queue focused on the row.
+    const canReview = ['manager', 'admin', 'superadmin'].includes(CU.role);
+    if (n.type === 'submitted' && canReview) {
+      return { label: 'Review this submission', run: () => reviewTask(taskId) };
+    }
+    return { label: 'Open the task', run: () => viewTask(taskId) };
+  }
+
+  if (n.type === 'file-shared') {
+    const fileId = getId(n.attachment);
+    return {
+      label: 'Open in Files',
+      // Older notifications predate the attachment reference and can only
+      // land on the page; newer ones open the file itself.
+      run: () => { FILES_TAB = 'received'; goFiltered('files', fileId ? { attachment: fileId } : {}); },
+    };
+  }
+
+  if (n.type === 'change-request') {
+    return canSeeApprovals()
+      ? { label: 'Open Approvals', run: () => sp('approvals') }
+      : { label: '', run: null };
+  }
+
+  return { label: '', run: null };
+}
+
+async function openNotif(id) {
+  const n = _notifs.find(x => x._id === id);
+  if (!n) return;
+  markNotifRead(id);                 // not awaited — the destination matters more
+  const dest = notifDest(n);
+  if (dest.run) dest.run();
 }
 
 async function markNotifRead(id) {
@@ -4995,23 +5486,74 @@ function confirmDeleteFile(id, name, after) {
   });
 }
 
+// Only offer Preview where the server will actually issue an inline URL.
+// Anything else answers 415, and a button that always fails is worse than one
+// that is not there. FILECFG is loaded before any file list renders.
+const canPreviewFile = f => (FILECFG?.previewTypes || []).includes(f.mimeType);
+
 function fileRow(f, { showDelete, after, context }) {
   const who  = f.uploadedBy?.name || '—';
   const mine = getId(f.uploadedBy) === CU._id;
-  return `<div class="file-row">
+
+  // What the file is about, when the sender said. Shown as chips rather than
+  // folded into the subtitle so it survives a long filename and a long sender.
+  const tags = [
+    f.project      ? esc(f.project)          : '',
+    f.task?.title  ? esc(f.task.title)       : '',
+  ].filter(Boolean);
+
+  return `<div class="file-row" id="filerow-${f._id}">
     <div class="file-ic">${IC.files}</div>
     <div class="file-meta">
       <div class="file-name" title="${esc(f.filename)}">${esc(f.filename)}</div>
       <div class="file-sub">${esc(context || who)} · ${fmtBytes(f.size)} · ${fmtTime(f.createdAt)} ${fmtDate(f.createdAt)}</div>
+      ${tags.length ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">
+        ${tags.map(t => `<span class="chip">${t}</span>`).join('')}
+      </div>` : ''}
       ${f.note ? `<div class="file-note">${esc(f.note)}</div>` : ''}
     </div>
     <div class="file-actions">
+      ${canPreviewFile(f)
+        ? `<button class="btn btn-secondary btn-xs" onclick="previewFile('${f._id}')" title="Preview">${IC.eye}</button>`
+        : ''}
       <button class="btn btn-secondary btn-xs" onclick="downloadFile('${f._id}')" title="Download">${IC.download}</button>
       ${showDelete && (mine || ['admin','superadmin'].includes(CU.role))
         ? `<button class="btn btn-xs" style="background:var(--red-wash);color:var(--red-ink)" onclick="confirmDeleteFile('${f._id}','${esc(f.filename).replace(/'/g, "\\'")}', ${after})" title="Delete">${IC.trash}</button>`
         : ''}
     </div>
   </div>`;
+}
+
+// A look before committing to a download. Rendered in a modal rather than a new
+// tab: a presigned URL is a bearer credential with a five-minute life, and a
+// tab puts it in the address bar where it can be copied out and shared.
+async function previewFile(id) {
+  let data;
+  try {
+    data = await GET(`/attachments/${id}/preview`);
+  } catch (e) {
+    toast('Cannot preview', e.message, 'warning');
+    return;
+  }
+
+  const isImage = data.mimeType.startsWith('image/');
+  openModal(data.filename, `
+    <div style="background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+      ${isImage
+        ? `<img src="${data.url}" alt="${esc(data.filename)}"
+                style="display:block;width:100%;max-height:66vh;object-fit:contain;background:var(--bg-app)">`
+        // sandbox with no allow-scripts: a PDF still renders in the browser's
+        // own viewer, but nothing in the document can run or reach this page.
+        : `<iframe src="${data.url}" title="${esc(data.filename)}" sandbox
+                   style="display:block;width:100%;height:66vh;border:0;background:var(--bg-app)"></iframe>`}
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:8px">
+      ${fmtBytes(data.size)} · this preview link expires in ${Math.round((data.expiresIn || 300) / 60)} minutes
+    </div>
+  `, [
+    { label: 'Close', cls: 'btn-secondary', fn: closeModal },
+    { label: 'Download', cls: 'btn-primary', fn: () => { downloadFile(id); closeModal(); } },
+  ], true);
 }
 
 // ── Files section inside the task modal ────────────────────────────────
@@ -5098,9 +5640,11 @@ async function rdFiles() {
 }
 
 // ── Recipient picker state ─────────────────────────────────────────────
-let FS_PEOPLE = [];   // everyone selectable
-let FS_PICKED = [];   // ids chosen so far, in the order they were added
-let FS_ACTIVE = -1;   // highlighted row in the open menu, for arrow keys
+let FS_PEOPLE   = [];   // everyone selectable
+let FS_PICKED   = [];   // ids chosen so far, in the order they were added
+let FS_ACTIVE   = -1;   // highlighted row in the open menu, for arrow keys
+let FS_PROJECTS = [];   // company projects, for filing the send
+let FS_TASKS    = [];   // tasks this person can file a send against
 
 function fsRenderChips() {
   const box = document.getElementById('fsChips');
@@ -5184,6 +5728,15 @@ async function buildComposer() {
     people = users;
   } catch (e) { people = []; }
 
+  // What the file can be filed against. Tasks are whatever this person can
+  // already see — their own for an employee, their team's for a manager — so
+  // the list needs no scoping of its own.
+  FS_PROJECTS = await projectList();
+  try {
+    const { tasks } = await GET('/tasks?limit=100');
+    FS_TASKS = tasks.slice(0, 60);
+  } catch (e) { FS_TASKS = []; }
+
   box.innerHTML = `
     <div class="form-group">
       <label class="form-label" id="fsToLabel">Send to</label>
@@ -5199,6 +5752,22 @@ async function buildComposer() {
            </div>
            <div class="file-hint" style="margin-top:5px">Your manager, HR and the CEO/Director. Pick one, or keep going to add more.</div>`
         : `<div class="file-empty">No recipients available to you.</div>`}
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Project <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
+        ${projectSelect('fsProject', '', FS_PROJECTS, { allowAll: false })}
+      </div>
+      <div class="form-group">
+        <label class="form-label">Task <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
+        <select class="form-select" id="fsTask">
+          <option value="">Not about a specific task</option>
+          ${FS_TASKS.map(t => `<option value="${t._id}">${esc(t.title)}${t.project ? ' — ' + esc(t.project) : ''}</option>`).join('')}
+        </select>
+        <div class="file-hint" style="margin-top:5px">
+          Naming a task also files it on that task, where its reviewers can see it.
+        </div>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Note <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
@@ -5230,9 +5799,11 @@ async function buildComposer() {
 }
 
 async function sendFile() {
-  const note = document.getElementById('fsNote').value.trim();
-  const file = document.getElementById('fsFile').files?.[0];
-  const hint = document.getElementById('fsHint');
+  const note    = document.getElementById('fsNote').value.trim();
+  const file    = document.getElementById('fsFile').files?.[0];
+  const hint    = document.getElementById('fsHint');
+  const project = projValue('fsProject');
+  const taskId  = document.getElementById('fsTask')?.value || undefined;
 
   const recipients = [...FS_PICKED];
   if (!recipients.length) { toast('No recipient', 'Choose at least one person.', 'warning'); return; }
@@ -5240,8 +5811,9 @@ async function sendFile() {
 
   try {
     hint.textContent = 'Uploading… 0%';
-    await doUpload(file, { kind: 'direct-message', recipients, note },
+    await doUpload(file, { kind: 'direct-message', recipients, note, project, taskId },
       p => hint.textContent = `Uploading… ${p}%`);
+    if (project && !FS_PROJECTS.includes(project)) await projectList(true);
     toast('Sent', `"${file.name}" sent to ${recipients.length} ${recipients.length === 1 ? 'person' : 'people'}.`, 'success');
     await buildComposer();
     FILES_TAB = 'sent';
@@ -5262,8 +5834,22 @@ function switchFilesTab(tab) {
 async function loadInbox() {
   const list = document.getElementById('fileList');
   if (!list) return;
+
+  // Arriving from a notification about one specific file.
+  const want = takeFilters('files')?.attachment || null;
+
   try {
     const { received, sent } = await GET('/attachments/inbox');
+
+    // Land on the tab the file is actually in rather than assuming "received"
+    // — the sender clicking their own notification would otherwise see an
+    // empty list and conclude the file had vanished.
+    if (want && !received.some(f => f._id === want) && sent.some(f => f._id === want)) {
+      FILES_TAB = 'sent';
+      document.getElementById('ftab-received')?.classList.remove('active');
+      document.getElementById('ftab-sent')?.classList.add('active');
+    }
+
     const rows = FILES_TAB === 'received' ? received : sent;
 
     list.innerHTML = rows.length
@@ -5275,6 +5861,15 @@ async function loadInbox() {
             : `To ${(f.recipients || []).map(r => r.name).join(', ') || (f.task ? 'task: ' + (f.task.title || '') : '—')}`,
         })).join('')
       : `<div class="file-empty">${FILES_TAB === 'received' ? 'Nothing has been sent to you yet.' : 'You have not sent any files yet.'}</div>`;
+
+    if (want) {
+      const row = document.getElementById('filerow-' + want);
+      if (row) {
+        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        row.classList.add('file-row-flash');
+        setTimeout(() => row.classList.remove('file-row-flash'), 2200);
+      }
+    }
   } catch (e) {
     list.innerHTML = `<div class="file-empty">Could not load files: ${esc(e.message)}</div>`;
   }
@@ -5387,8 +5982,13 @@ async function rdSettings() {
           </div>
         </div>
         <div class="profile-fields">
-          <div><div class="profile-field-label">Employee ID</div><div class="profile-field-val">${CU.empId || '—'}</div></div>
-          <div><div class="profile-field-label">Department</div><div class="profile-field-val">${CU.department?.name || '—'}</div></div>
+          <div><div class="profile-field-label">Employee ID</div><div class="profile-field-val">${esc(CU.empId || '—')}</div></div>
+          <div>
+            <div class="profile-field-label">Username</div>
+            <div class="profile-field-val" style="font-family:var(--font-mono)">${esc(CU.username || '—')}</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:2px">Sign in with either this or your employee ID.</div>
+          </div>
+          <div><div class="profile-field-label">Department</div><div class="profile-field-val">${esc(CU.department?.name || '—')}</div></div>
           <div><div class="profile-field-label">Joined</div><div class="profile-field-val">${fmtDate(CU.joined)}</div></div>
         </div>
       </div>
@@ -5431,18 +6031,17 @@ async function rdSettings() {
       </div>
     </div>
 
+    <!-- The System Information panel that used to sit here (API endpoint,
+         browser string, session line, clock) was developer diagnostics on a
+         page employees use to change their password. Sign Out was the one
+         thing in it anyone needed, so it keeps the card and the rest is gone. -->
     <div class="card">
-      <div class="card-header"><div class="card-title">System Information</div></div>
-      <div class="card-body">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
-          <div><div class="profile-field-label">API Endpoint</div><div class="profile-field-val" style="font-family:var(--font-mono);font-size:11px;word-break:break-all">${API_BASE}</div></div>
-          <div><div class="profile-field-label">Session</div><div class="profile-field-val">${CU.name} (${CU.role})</div></div>
-          <div><div class="profile-field-label">Browser</div><div class="profile-field-val">${navigator.userAgent.split(' ').slice(-2).join(' ')}</div></div>
-          <div><div class="profile-field-label">Current Date</div><div class="profile-field-val">${new Date().toLocaleString()}</div></div>
+      <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text-primary)">Signed in as ${esc(CU.name)}</div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px">Sign out on this device.</div>
         </div>
-        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
-          <button class="btn btn-danger btn-sm" onclick="doLogout()">${IC.x} Sign Out</button>
-        </div>
+        <button class="btn btn-danger btn-sm" onclick="doLogout()">${IC.x} Sign Out</button>
       </div>
     </div>
   </div>`;
@@ -5453,7 +6052,9 @@ async function saveProfileEmail() {
   try {
     const { user } = await PUT('/auth/profile', { email });
     CU.email = user.email;
-    localStorage.setItem('tf_user', JSON.stringify(CU));
+    // Back into whichever store this session was started in, so an update does
+    // not quietly promote a tab-only session to a persistent one.
+    writeSession(localStorage.getItem('tf_token') !== null, { tf_user: JSON.stringify(CU) });
     toast('Email updated', '', 'success');
   } catch (e) { toast('Failed', e.message, 'error'); }
 }

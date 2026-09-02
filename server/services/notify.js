@@ -37,7 +37,7 @@ async function ceos() {
 // Failures are swallowed deliberately: a notification is never important
 // enough to fail the task write that triggered it. Same contract as the
 // audit logger in middleware/auth.js.
-async function notify(recipientIds, { type, title, message, task, actor, severity }) {
+async function notify(recipientIds, { type, title, message, task, attachment, actor, severity }) {
   try {
     const actorStr = actor ? actor.toString() : null;
 
@@ -52,8 +52,9 @@ async function notify(recipientIds, { type, title, message, task, actor, severit
     return await Notification.insertMany(unique.map(user => ({
       user, type, title,
       message:  message  || '',
-      task:     task     || undefined,
-      actor:    actor    || undefined,
+      task:       task       || undefined,
+      attachment: attachment || undefined,
+      actor:      actor      || undefined,
       severity: severity || 'info',
     })));
   } catch (err) {
@@ -247,9 +248,10 @@ async function fileShared(attachment, actor, actorName) {
     message: `${actorName} shared "${attachment.filename}"${
       attachment.note ? ` — ${attachment.note}` : ''
     }.`,
-    task: attachment.task || undefined,
+    task:       attachment.task || undefined,
+    attachment: attachment._id,
     actor,
-    severity: 'info',
+    severity:   'info',
   });
 }
 

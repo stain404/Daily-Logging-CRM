@@ -6,6 +6,7 @@ const Team       = require('../models/Team');
 const Department = require('../models/Department');
 const { protect, authorize } = require('../middleware/auth');
 const { orgToday, orgMonthStart } = require('../utils/orgTime');
+const { managedUserIds } = require('../utils/scope');
 
 // ── GET /api/reports/employee?from=&to= ───────────────────────────────
 router.get('/employee', protect, authorize('hr', 'manager', 'admin', 'superadmin'), async (req, res) => {
@@ -20,9 +21,7 @@ router.get('/employee', protect, authorize('hr', 'manager', 'admin', 'superadmin
 
     // Managers only get reports for members of teams they manage.
     if (req.user.role === 'manager') {
-      const teams     = await Team.find({ manager: req.user._id });
-      const memberIds = teams.flatMap(t => t.members.map(m => m.toString()));
-      userQuery._id = { $in: memberIds };
+      userQuery._id = { $in: await managedUserIds(req.user) };
     }
 
     if (userId) {
@@ -157,9 +156,7 @@ router.get('/employee-of-month', protect, authorize('hr', 'manager', 'admin', 's
 
     const userQuery = { role: { $in: ['employee', 'manager'] } };
     if (req.user.role === 'manager') {
-      const teams     = await Team.find({ manager: req.user._id });
-      const memberIds = teams.flatMap(t => t.members);
-      userQuery._id = { $in: memberIds };
+      userQuery._id = { $in: await managedUserIds(req.user) };
     }
     const eligible   = await User.find(userQuery).select('_id');
     const eligibleIds = eligible.map(u => u._id);
