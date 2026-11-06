@@ -1456,6 +1456,44 @@
     .sw input:disabled ~ .sw-track { opacity: .55; }
     .sw input:disabled ~ .sw-thumb { opacity: .55; }
 
+    /* ── Sales CRM ────────────────────────────────────────────────────
+       Kanban board, lead cards, follow-up list — built on the same tokens
+       as everything else here (--bg-panel, --border, --accent…) rather than
+       its own palette, so it reads as one product with Daily Logging. */
+    .sc-board { display: grid; grid-auto-flow: column; grid-auto-columns: 240px; gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+    .sc-col { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .sc-col-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 7px; border-bottom: 2px solid var(--stage-color, var(--border)); }
+    .sc-col-head .name { font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; }
+    .sc-col-head .count { font-size: 11px; color: var(--text-faint); font-weight: 700; font-family: var(--font-mono); }
+    .sc-col-sum { font-size: 11px; color: var(--text-muted); padding: 0 4px; font-family: var(--font-mono); }
+    .sc-card { background: var(--bg-panel-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 11px; cursor: pointer; transition: border-color var(--transition); }
+    .sc-card:hover { border-color: var(--accent-dim); }
+    .sc-card .top { display: flex; justify-content: space-between; gap: 6px; align-items: flex-start; }
+    .sc-card .lname { font-weight: 700; font-size: 13px; color: var(--text-primary); }
+    .sc-card .company { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
+    .sc-card .meta { display: flex; align-items: center; justify-content: space-between; margin-top: 9px; }
+    .sc-card .value { font-weight: 700; font-size: 12px; font-family: var(--font-mono); color: var(--text-primary); }
+    .sc-card .due { font-size: 10.5px; margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--border); color: var(--text-muted); font-family: var(--font-mono); }
+    .sc-card .due.today { color: var(--warn-ink); } .sc-card .due.overdue { color: var(--red-ink); font-weight: 700; }
+    .sc-fu-item { background: var(--bg-panel); border: 1px solid var(--border); border-left: 3px solid var(--stage-color, var(--border)); border-radius: var(--radius); padding: 11px 14px; display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 8px; }
+    .sc-fu-item .fu-name { font-weight: 700; font-size: 13px; color: var(--text-primary); }
+    .sc-fu-item .fu-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
+    .sc-fu-item .fu-main { flex: 1; min-width: 0; }
+    .sc-funnel-row { display: grid; grid-template-columns: 86px 1fr 40px; align-items: center; gap: 10px; margin-bottom: 9px; font-size: 12px; }
+    .sc-fbar-track { background: var(--bg-raised); border-radius: 6px; height: 18px; overflow: hidden; }
+    .sc-fbar { height: 100%; border-radius: 6px; background: var(--stage-color); }
+    .sc-rep-row { display: grid; grid-template-columns: 26px 1fr 50px 40px; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .sc-rep-row:last-child { border-bottom: none; }
+    .sc-rbar-track { background: var(--bg-raised); border-radius: 6px; height: 7px; grid-column: 1/-1; margin-top: 3px; }
+    .sc-rbar { height: 100%; border-radius: 6px; background: var(--accent); }
+    .sc-stage-select { display: flex; gap: 6px; flex-wrap: wrap; }
+    .sc-stage-opt { appearance: none; border: 1px solid var(--border); background: var(--bg-panel-2); color: var(--text-secondary); font: inherit; font-size: 11.5px; font-weight: 700; padding: 6px 10px; border-radius: 99px; cursor: pointer; }
+    .sc-stage-opt.on { background: var(--stage-color); border-color: var(--stage-color); color: #0b0c0e; }
+    .sc-log-item { background: var(--bg-panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 12px; margin-bottom: 8px; }
+    .sc-log-item .lo-head { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 10.5px; margin-bottom: 3px; font-family: var(--font-mono); }
+    .sc-access-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .sc-access-row:last-child { border-bottom: none; }
+
     /* ── File rows ────────────────────────────────────────────────────
        Used by the Files page and the attachments section of a task. */
     .file-row { display: flex; align-items: flex-start; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--border); }
@@ -1756,6 +1794,7 @@
         <div id="page-audit"         class="page"></div>
         <div id="page-notifications" class="page"></div>
         <div id="page-files"         class="page"></div>
+        <div id="page-salescrm"      class="page"></div>
         <div id="page-settings"      class="page"></div>
       </main>
     </div>
@@ -1775,6 +1814,7 @@ const IC = {
   teams:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M5.2 20a7 7 0 0 1 13.6 0"/></svg>`,
   departments:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
   reports:       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+  salescrm:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18.7 8 13 13.7 9.5 10.2 5 14.7"/></svg>`,
   audit:         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,
   notifications: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
   settings:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
@@ -2417,6 +2457,15 @@ function buildNav() {
   items.splice(settingsAt === -1 ? items.length : settingsAt, 0,
     { icon: 'files', label: 'Files', page: 'files' });
 
+  // The CEO always has it; anyone else needs salesCrmAccess, granted one
+  // account at a time from the CEO's own Settings page — see
+  // server/routes/users.js PUT /:id/sales-crm-access.
+  if (CU?.role === 'superadmin' || CU?.salesCrmAccess) {
+    const at = items.findIndex(i => i.page === 'settings');
+    items.splice(at === -1 ? items.length : at, 0,
+      { icon: 'salescrm', label: 'Sales CRM', page: 'salescrm' });
+  }
+
   // Only worth grouping when there is more than one item to group. A manager
   // sees Teams alone ("My Team"), and folding a single row behind a chevron
   // costs a click and buys nothing.
@@ -2512,7 +2561,7 @@ function sp(page) {
     daily: 'Daily Work', reviews: 'Task Feedback', employees: 'Employees', teams: 'Teams',
     departments: 'Departments', reports: 'Reports & Analytics',
     audit: 'Audit Log', notifications: 'Notifications', settings: 'Settings',
-    files: 'Files',
+    files: 'Files', salescrm: 'Sales CRM',
     approvals: CU?.role === 'hr' ? 'My Requests' : 'Approvals',
   };
   document.getElementById('pgTitle').textContent = titles[page] || page;
@@ -2526,7 +2575,7 @@ async function render(page) {
     daily: rdDaily,
     employees: rdEmployees, teams: rdTeams, departments: rdDepts,
     reports: rdReports, audit: rdAudit, notifications: rdNotifs, settings: rdSettings,
-    files: rdFiles, approvals: rdApprovals,
+    files: rdFiles, approvals: rdApprovals, salescrm: rdSalesCrm,
   };
   if (fns[page]) await fns[page]();
 }
@@ -5961,7 +6010,21 @@ async function rdSettings() {
     prefsErr = e.message;
   }
 
+  // The CEO is the only one who grants Sales CRM access (routes/users.js
+  // PUT /:id/sales-crm-access), so the toggle list only needs fetching for
+  // him — nobody else can act on it anyway.
+  let salesAccessUsers = null, salesAccessErr = null;
+  if (CU.role === 'superadmin') {
+    try {
+      const { users } = await GET('/users');
+      salesAccessUsers = users.filter(u => u.role !== 'superadmin' && u.active);
+    } catch (e) {
+      salesAccessErr = e.message;
+    }
+  }
+
   el.innerHTML = `<div style="max-width:620px">
+    ${CU.role === 'superadmin' ? salesAccessCard(salesAccessUsers, salesAccessErr) : ''}
     <div class="card mb">
       <div class="card-header"><div class="card-title">My Profile</div></div>
       <div class="card-body">
@@ -6037,6 +6100,49 @@ async function rdSettings() {
       </div>
     </div>
   </div>`;
+}
+
+// Superadmin-only card on their own Settings page — the one place this
+// capability can be granted, same pattern as canResetPasswords (see
+// server/models/User.js): a specific person gets it, not a role.
+function salesAccessCard(users, err) {
+  if (err) {
+    return `<div class="card mb">
+      <div class="card-header"><div class="card-title">Sales CRM Access</div></div>
+      <div class="card-body"><div class="pref-desc">Could not load the employee list: ${esc(err)}</div></div>
+    </div>`;
+  }
+  const rows = (users || []).map(u => `
+    <div class="sc-access-row">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text-primary)">${esc(u.name)}</div>
+        <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">${esc(u.empId || u.username)} &middot; ${esc(u.role)}</div>
+      </div>
+      <label class="sw" title="${u.salesCrmAccess ? 'Revoke' : 'Grant'} Sales CRM access for ${esc(u.name)}">
+        <input type="checkbox" ${u.salesCrmAccess ? 'checked' : ''}
+               onchange="toggleSalesCrmAccess('${u._id}', this.checked, '${esc(u.name).replace(/'/g, "\\'")}')"
+               aria-label="Sales CRM access for ${esc(u.name)}">
+        <span class="sw-track"></span><span class="sw-thumb"></span>
+      </label>
+    </div>`).join('') || '<div class="pref-desc">No other active accounts yet.</div>';
+
+  return `<div class="card mb">
+    <div class="card-header">
+      <div><div class="card-title">Sales CRM Access</div><div class="card-subtitle">Only you can grant this — pick who else can see the Sales CRM.</div></div>
+    </div>
+    <div class="card-body">${rows}</div>
+  </div>`;
+}
+
+async function toggleSalesCrmAccess(userId, access, name) {
+  try {
+    await PUT(`/users/${userId}/sales-crm-access`, { access });
+    toast(access ? 'Access granted' : 'Access revoked',
+          `${name} ${access ? 'can now open' : 'no longer has'} the Sales CRM.`, 'success');
+  } catch (e) {
+    toast('Could not update access', e.message, 'error');
+    rdSettings();
+  }
 }
 
 async function saveProfileEmail() {
@@ -6267,6 +6373,316 @@ function toast(title, msg = '', type = 'info', duration = 4000) {
   wrap.appendChild(el);
   setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, duration);
 }
+
+// ═══════════════════════════════════════════════════════
+//  SALES CRM (prototype — sample data only, nothing here is
+//  persisted; access is gated by CU.role==='superadmin' ||
+//  CU.salesCrmAccess, both real and server-enforced via
+//  routes/users.js PUT /:id/sales-crm-access)
+// ═══════════════════════════════════════════════════════
+const SC = (() => {
+  const STAGES = [
+    { id: 'new',         label: 'New',         color: 'var(--text-faint)' },
+    { id: 'contacted',   label: 'Contacted',   color: 'var(--cyan)' },
+    { id: 'qualified',   label: 'Qualified',   color: 'var(--accent)' },
+    { id: 'negotiation', label: 'Negotiation', color: 'var(--warn)' },
+    { id: 'won',         label: 'Won',         color: 'var(--green)' },
+    { id: 'lost',        label: 'Lost',        color: 'var(--red)' },
+  ];
+  const stageById = Object.fromEntries(STAGES.map(s => [s.id, s]));
+  const badgeByStage = { new: 'badge-grey', contacted: 'badge-blue', qualified: 'badge-blue', negotiation: 'badge-amber', won: 'badge-green', lost: 'badge-red' };
+
+  const REPS = [
+    { id: 'sanah', name: 'Sanah', manager: 'Suhail Ahmed' },
+    { id: 'rehan', name: 'Rehan', manager: 'Suhail Ahmed' },
+    { id: 'fathima', name: 'Fathima', manager: 'Suhail Ahmed' },
+    { id: 'basil', name: 'Basil', manager: 'Suhail Ahmed' },
+  ];
+  const repById = Object.fromEntries(REPS.map(r => [r.id, r]));
+  const initials = n => n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = off => { const x = new Date(today); x.setDate(x.getDate() + off); return x.toISOString().slice(0, 10); };
+
+  let leads = [
+    { id: 1, name: 'Hamdan Al Marri', company: 'Marri Holdings', source: 'Referral', rep: 'sanah', stage: 'negotiation', value: 420000, due: d(0), calls: [
+      { date: d(-6), outcome: 'Connected', note: 'Walked through the two-unit package, asked for a revised payment plan.' },
+      { date: d(-2), outcome: 'Callback requested', note: 'Wants to discuss with his partner before committing.' }] },
+    { id: 2, name: 'Leena Haddad', company: 'Haddad Family Office', source: 'Website', rep: 'rehan', stage: 'qualified', value: 260000, due: d(0), calls: [
+      { date: d(-4), outcome: 'Connected', note: 'Interested in the waterfront plots, sending brochure.' }] },
+    { id: 3, name: 'Omar Qureshi', company: 'Qureshi Textiles', source: 'Exhibition', rep: 'basil', stage: 'contacted', value: 150000, due: d(1), calls: [
+      { date: d(-1), outcome: 'No answer', note: 'Left voicemail, will try again tomorrow afternoon.' }] },
+    { id: 4, name: 'Fatima Al Suwaidi', company: 'Suwaidi Trading', source: 'Referral', rep: 'fathima', stage: 'won', value: 510000, due: null, calls: [
+      { date: d(-20), outcome: 'Connected', note: 'Site visit booked.' },
+      { date: d(-8), outcome: 'Connected', note: 'Signed the agreement — payment received.' }] },
+    { id: 5, name: 'Rashid Obaid', company: 'Obaid Logistics', source: 'Cold call', rep: 'sanah', stage: 'new', value: 95000, due: d(-2), calls: [] },
+    { id: 6, name: 'Priya Menon', company: 'Menon & Co.', source: 'Website', rep: 'rehan', stage: 'contacted', value: 180000, due: d(-1), calls: [
+      { date: d(-3), outcome: 'Connected', note: 'Needs financing details before she proceeds.' }] },
+    { id: 7, name: 'Khalid Barakat', company: 'Barakat Builders', source: 'Referral', rep: 'basil', stage: 'negotiation', value: 340000, due: d(2), calls: [
+      { date: d(-5), outcome: 'Connected', note: 'Negotiating on the service charge.' }] },
+    { id: 8, name: 'Aisha Noor', company: 'Noor Retail Group', source: 'Exhibition', rep: 'fathima', stage: 'qualified', value: 220000, due: d(3), calls: [
+      { date: d(-2), outcome: 'Connected', note: 'Shortlisted two units, comparing with another developer.' }] },
+    { id: 9, name: 'Tariq Jameel', company: 'Jameel Imports', source: 'Cold call', rep: 'sanah', stage: 'lost', value: 130000, due: null, calls: [
+      { date: d(-15), outcome: 'Not interested', note: 'Went with a competitor on price.' }] },
+    { id: 10, name: 'Dana Khoury', company: 'Khoury Consulting', source: 'Website', rep: 'rehan', stage: 'new', value: 75000, due: d(0), calls: [] },
+    { id: 11, name: 'Mansour Saleh', company: 'Saleh Properties', source: 'Referral', rep: 'basil', stage: 'contacted', value: 265000, due: d(5), calls: [
+      { date: d(-1), outcome: 'Connected', note: 'Wants a second viewing next week.' }] },
+    { id: 12, name: 'Grace Fernandes', company: 'Fernandes Exports', source: 'Website', rep: 'fathima', stage: 'new', value: 60000, due: d(-3), calls: [] },
+  ];
+  let managerAlerts = [];
+  let view = 'pipeline';
+  let activeLeadId = null;
+
+  const money = n => 'AED ' + n.toLocaleString('en-US');
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    const diff = Math.round((new Date(iso) - today) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    if (diff === -1) return 'Yesterday';
+    if (diff < 0) return Math.abs(diff) + 'd overdue';
+    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  }
+  function dueClass(iso) {
+    if (!iso) return '';
+    const diff = Math.round((new Date(iso) - today) / 86400000);
+    if (diff < 0) return 'overdue';
+    if (diff === 0) return 'today';
+    return '';
+  }
+  function checkOverdueNotifications() {
+    leads.forEach(l => {
+      if (l.due && dueClass(l.due) === 'overdue' && !l.managerNotified) {
+        l.managerNotified = true;
+        const rep = repById[l.rep];
+        managerAlerts.unshift({ to: rep.manager, rep: rep.name, lead: l.name, company: l.company, due: l.due, sentAt: new Date().toISOString() });
+      }
+    });
+  }
+
+  function tabs() {
+    const items = [['pipeline', 'Pipeline'], ['leads', 'Leads'], ['followups', 'Follow-ups'], ['reports', 'Reports']];
+    return `<div class="tab-bar">${items.map(([k, label]) =>
+      `<div class="tab ${view === k ? 'active' : ''}" onclick="SC.setView('${k}')">${label}</div>`).join('')}</div>`;
+  }
+
+  function renderKpis() {
+    const open = leads.filter(l => l.stage !== 'won' && l.stage !== 'lost');
+    const pipelineValue = open.reduce((s, l) => s + l.value, 0);
+    const won = leads.filter(l => l.stage === 'won');
+    const closedCount = leads.filter(l => l.stage === 'won' || l.stage === 'lost').length;
+    const winRate = closedCount ? Math.round(won.length / closedCount * 100) : 0;
+    const overdue = leads.filter(l => l.due && dueClass(l.due) === 'overdue').length;
+    const items = [
+      { cls: 'stat-blue', label: 'Open leads', value: open.length, sub: open.length + ' in active stages' },
+      { cls: 'stat-green', label: 'Pipeline value', value: money(pipelineValue), sub: 'across open deals' },
+      { cls: 'stat-amber', label: 'Win rate', value: winRate + '%', sub: won.length + ' won of ' + closedCount + ' closed' },
+      { cls: 'stat-red', label: 'Overdue follow-ups', value: overdue, sub: overdue ? 'need attention' : 'all caught up' },
+    ];
+    return `<div class="stat-grid mb">${items.map(k =>
+      `<div class="stat-card ${k.cls}"><div class="stat-icon"></div><div class="stat-label">${k.label}</div><div class="stat-value">${k.value}</div><div class="stat-meta">${k.sub}</div></div>`
+    ).join('')}</div>`;
+  }
+
+  function renderPipeline() {
+    const cols = STAGES.map(st => {
+      const items = leads.filter(l => l.stage === st.id);
+      const sum = items.reduce((s, l) => s + l.value, 0);
+      const cards = items.map(l => {
+        const rep = repById[l.rep]; const dc = dueClass(l.due);
+        return `<div class="sc-card" onclick="SC.openLead(${l.id})">
+          <div class="top"><div><div class="lname">${esc(l.name)}</div><div class="company">${esc(l.company)}</div></div>
+            <span class="av av-sm">${initials(rep.name)}</span></div>
+          <div class="meta"><span class="value">${money(l.value)}</span></div>
+          ${l.due ? `<div class="due ${dc}">${fmtDate(l.due)}${l.managerNotified ? ` &middot; <span style="color:var(--red-ink)">&#9993;</span>` : ''}</div>` : ''}
+        </div>`;
+      }).join('') || '<div style="font-size:11.5px;color:var(--text-faint);padding:10px 4px">No leads here</div>';
+      return `<div class="sc-col" style="--stage-color:${st.color}">
+        <div class="sc-col-head"><span class="name">${st.label}</span><span class="count">${items.length}</span></div>
+        <div class="sc-col-sum">${money(sum)}</div>
+        <div style="display:flex;flex-direction:column;gap:8px">${cards}</div>
+      </div>`;
+    }).join('');
+    return `${renderKpis()}
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="btn btn-primary btn-sm" onclick="SC.openNewLead()">${IC.check} New lead</button>
+      </div>
+      <div class="sc-board">${cols}</div>`;
+  }
+
+  function renderLeads() {
+    return `<div class="table-wrap">
+      <table class="tbl"><thead><tr><th>Lead</th><th>Stage</th><th>Value</th><th>Rep</th><th>Source</th><th>Next follow-up</th></tr></thead>
+        <tbody>${leads.map(l => {
+          const st = stageById[l.stage]; const rep = repById[l.rep]; const dc = dueClass(l.due);
+          return `<tr onclick="SC.openLead(${l.id})" style="cursor:pointer">
+            <td><div style="display:flex;align-items:center;gap:9px"><span class="av av-sm">${initials(rep.name)}</span>
+              <div><div class="cell-main">${esc(l.name)}</div><div class="cell-sub">${esc(l.company)}</div></div></div></td>
+            <td><span class="badge ${badgeByStage[l.stage]}">${st.label}</span></td>
+            <td>${money(l.value)}</td><td>${rep.name}</td><td>${esc(l.source)}</td>
+            <td style="color:${dc === 'overdue' ? 'var(--red-ink)' : dc === 'today' ? 'var(--warn-ink)' : 'inherit'}">${fmtDate(l.due)}${l.managerNotified ? ' <span style="color:var(--red-ink)">&#9993;</span>' : ''}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`;
+  }
+
+  function renderFollowups() {
+    checkOverdueNotifications();
+    const withDue = leads.filter(l => l.due);
+    const groups = { overdue: [], today: [], upcoming: [] };
+    withDue.forEach(l => { const dc = dueClass(l.due); (groups[dc === 'overdue' ? 'overdue' : dc === 'today' ? 'today' : 'upcoming']).push(l); });
+    groups.upcoming.sort((a, b) => a.due.localeCompare(b.due));
+    const badgeCls = { overdue: 'badge-red', today: 'badge-amber', '': 'badge-grey' };
+    const section = (title, items, cls) => {
+      if (!items.length) return '';
+      return `<div class="mb"><div style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">${title} (${items.length})</div>
+        ${items.map(l => {
+          const st = stageById[l.stage]; const rep = repById[l.rep];
+          return `<div class="sc-fu-item" style="--stage-color:${st.color}" onclick="SC.openLead(${l.id})">
+            <div class="fu-main"><div class="fu-name">${esc(l.name)} <span style="font-weight:400;color:var(--text-muted)">— ${esc(l.company)}</span></div>
+              <div class="fu-sub">${st.label} &middot; ${rep.name} &middot; ${money(l.value)}${l.managerNotified ? ` &middot; <span style="color:var(--red-ink);font-weight:700">&#9993; ${esc(rep.manager)} notified</span>` : ''}</div></div>
+            <span class="badge ${badgeCls[cls]}">${fmtDate(l.due)}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+    };
+    const alertsSection = managerAlerts.length ? `<div class="card">
+      <div class="card-header"><div class="card-title">Manager alerts sent (${managerAlerts.length})</div></div>
+      <div class="card-body">${managerAlerts.map(a => `<div class="sc-log-item">
+        <div class="lo-head"><span>To ${esc(a.to)}</span><span>${new Date(a.sentAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span></div>
+        <div><strong>${esc(a.rep)}</strong>'s follow-up with <strong>${esc(a.lead)}</strong> (${esc(a.company)}) is overdue — was due ${fmtDate(a.due)}.</div>
+      </div>`).join('')}</div>
+    </div>` : '';
+    return (section('Overdue', groups.overdue, 'overdue') + section('Due today', groups.today, 'today') + section('Upcoming', groups.upcoming, '') + alertsSection)
+      || '<p style="color:var(--text-faint)">Nothing scheduled.</p>';
+  }
+
+  function renderReports() {
+    const max = Math.max(...STAGES.map(s => leads.filter(l => l.stage === s.id).length), 1);
+    const funnel = STAGES.map(s => {
+      const n = leads.filter(l => l.stage === s.id).length;
+      const pct = Math.round(n / max * 100);
+      return `<div class="sc-funnel-row"><span>${s.label}</span>
+        <div class="sc-fbar-track"><div class="sc-fbar" style="width:${pct}%;--stage-color:${s.color}"></div></div>
+        <span style="text-align:right;font-weight:700;font-family:var(--font-mono)">${n}</span></div>`;
+    }).join('');
+    const callCounts = REPS.map(r => ({ rep: r, n: leads.reduce((s, l) => s + (l.rep === r.id ? l.calls.length : 0), 0) }));
+    const maxCalls = Math.max(...callCounts.map(c => c.n), 1);
+    const repCalls = callCounts.sort((a, b) => b.n - a.n).map(c => `
+      <div class="sc-rep-row">
+        <span class="av av-sm">${initials(c.rep.name)}</span><span>${c.rep.name}</span>
+        <span style="text-align:right;font-family:var(--font-mono)">${c.n}</span>
+        <span style="font-size:10.5px;color:var(--text-faint)">calls</span>
+        <div class="sc-rbar-track"><div class="sc-rbar" style="width:${Math.round(c.n / maxCalls * 100)}%"></div></div>
+      </div>`).join('');
+    const totalCalls = leads.reduce((s, l) => s + l.calls.length, 0);
+    const wonLeads = leads.filter(l => l.stage === 'won');
+    const avgDeal = Math.round(wonLeads.reduce((s, l) => s + l.value, 0) / Math.max(1, wonLeads.length));
+    const kpis = [
+      { cls: 'stat-blue', label: 'Total calls logged', value: totalCalls },
+      { cls: 'stat-green', label: 'Avg. won deal size', value: money(avgDeal || 0) },
+      { cls: 'stat-amber', label: 'Active reps', value: REPS.length },
+      { cls: 'stat-red', label: 'Leads this month', value: leads.length },
+    ].map(k => `<div class="stat-card ${k.cls}"><div class="stat-label">${k.label}</div><div class="stat-value">${k.value}</div></div>`).join('');
+    return `<div class="g2">
+        <div class="card"><div class="card-header"><div class="card-title">Conversion funnel</div><div class="card-subtitle">Leads currently sitting at each stage</div></div><div class="card-body">${funnel}</div></div>
+        <div class="card"><div class="card-header"><div class="card-title">Calls logged by rep</div><div class="card-subtitle">This month</div></div><div class="card-body">${repCalls}</div></div>
+      </div>
+      <div class="stat-grid">${kpis}</div>`;
+  }
+
+  function render() {
+    const el = document.getElementById('page-salescrm');
+    if (!el) return;
+    checkOverdueNotifications();
+    const body = view === 'pipeline' ? renderPipeline()
+      : view === 'leads' ? renderLeads()
+      : view === 'followups' ? renderFollowups()
+      : renderReports();
+    el.innerHTML = `<div class="mb" style="background:var(--warn-wash);border:1px solid var(--warn);color:var(--warn-ink);border-radius:var(--radius);padding:9px 13px;font-size:12px;display:flex;gap:8px;align-items:center">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+        <span>Sample data only — not connected to the real database. Click a lead to open it, change its stage, or log a call.</span>
+      </div>
+      ${tabs()}
+      ${body}`;
+  }
+
+  function setView(v) { view = v; render(); }
+
+  // Reuses the app's one global modal (openModal/closeModal, #overlay) rather
+  // than building a second overlay — this page only ever needs one at a time.
+  function openLead(id) {
+    activeLeadId = id;
+    const l = leads.find(x => x.id === id);
+    if (!l) return;
+    const rep = repById[l.rep];
+    const bodyHtml = `
+      <div style="font-size:11.5px;color:var(--text-muted);margin:-4px 0 14px">${esc(l.company)} &middot; ${esc(l.source)}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <span class="badge badge-grey">Rep: ${rep.name}</span>
+        <span class="badge badge-grey">${money(l.value)}</span>
+        ${l.due ? `<span class="badge ${dueClass(l.due) === 'overdue' ? 'badge-red' : dueClass(l.due) === 'today' ? 'badge-amber' : 'badge-grey'}">Next: ${fmtDate(l.due)}</span>` : ''}
+        ${l.managerNotified ? `<span class="badge badge-red">&#9993; ${esc(rep.manager)} notified</span>` : ''}
+      </div>
+      <div class="form-group">
+        <label class="form-label">Stage</label>
+        <div class="sc-stage-select">${STAGES.map(s => `<button type="button" class="sc-stage-opt ${s.id === l.stage ? 'on' : ''}" style="--stage-color:${s.color}" onclick="SC.setStage(${l.id},'${s.id}')">${s.label}</button>`).join('')}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Log a call</label>
+        <textarea class="form-input" id="scCallNote" placeholder="What happened on the call…" rows="2"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <select class="form-input" id="scCallOutcome" style="flex:1">
+            <option>Connected</option><option>No answer</option><option>Callback requested</option><option>Not interested</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="SC.logCall(${l.id})">Log call</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">History (${l.calls.length})</label>
+        ${l.calls.slice().reverse().map(c => `<div class="sc-log-item">
+          <div class="lo-head"><span>${new Date(c.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span><span>${esc(c.outcome)}</span></div>
+          <div>${esc(c.note)}</div>
+        </div>`).join('') || '<div style="font-size:11.5px;color:var(--text-faint)">No calls logged yet.</div>'}
+      </div>`;
+    openModal(l.name, bodyHtml, null, false);
+  }
+
+  function setStage(id, stage) { const l = leads.find(x => x.id === id); if (l) l.stage = stage; render(); openLead(id); }
+  function logCall(id) {
+    const note = document.getElementById('scCallNote').value.trim();
+    if (!note) return;
+    const outcome = document.getElementById('scCallOutcome').value;
+    const l = leads.find(x => x.id === id);
+    l.calls.push({ date: new Date().toISOString().slice(0, 10), outcome, note });
+    render(); openLead(id);
+  }
+
+  function openNewLead() {
+    const bodyHtml = `
+      <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="scNlName" placeholder="Full name"></div>
+      <div class="form-group"><label class="form-label">Company</label><input class="form-input" id="scNlCompany" placeholder="Company name"></div>
+      <div class="form-group"><label class="form-label">Rep</label><select class="form-input" id="scNlRep">${REPS.map(r => `<option value="${r.id}">${r.name}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Estimated value (AED)</label><input class="form-input" type="number" id="scNlValue" placeholder="0"></div>`;
+    openModal('New lead', bodyHtml, [{ label: 'Add lead', cls: 'btn-primary', fn: () => SC.saveNewLead() }], false);
+  }
+  function saveNewLead() {
+    const name = document.getElementById('scNlName').value.trim();
+    if (!name) return;
+    const company = document.getElementById('scNlCompany').value.trim() || '—';
+    const rep = document.getElementById('scNlRep').value;
+    const value = Number(document.getElementById('scNlValue').value) || 0;
+    const nid = Math.max(0, ...leads.map(x => x.id)) + 1;
+    leads.push({ id: nid, name, company, source: 'Manual entry', rep, stage: 'new', value, due: d(1), calls: [] });
+    closeModal();
+    render();
+  }
+
+  return { render, setView, openLead, setStage, logCall, openNewLead, saveNewLead };
+})();
+
+async function rdSalesCrm() { SC.render(); }
 </script>
 </body>
 </html>

@@ -42,6 +42,12 @@ const UserSchema = new mongoose.Schema({
   // The reset route enforces it; the client only uses it to reveal the tool.
   canResetPasswords: { type: Boolean, default: false },
 
+  // Gates the Sales CRM nav item. Off by default; only the CEO can grant or
+  // revoke it (routes/users.js PUT /:id/sales-crm-access — not the general
+  // user-edit route), the same reasoning as canResetPasswords above: a
+  // capability the CEO hands out one person at a time, not a role.
+  salesCrmAccess: { type: Boolean, default: false },
+
   // Per-type email opt-outs. Default on, so existing rows (which have no
   // subdocument at all) read as opted in without a migration.
   //

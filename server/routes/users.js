@@ -351,6 +351,40 @@ router.put('/:id', protect, authorize('hr', 'admin', 'superadmin'), async (req, 
   }
 });
 
+// ── PUT /api/users/:id/sales-crm-access ─────────────────────────────────
+// Deliberately its own route, superadmin-only, separate from the general
+// PUT /:id above — the same reasoning as canResetPasswords: a capability the
+// CEO hands to one person at a time, not something HR or admin can grant by
+// editing a profile. The CEO always has access himself (checked client-side
+// off role, not this flag), so this route only ever needs to touch other
+// accounts.
+router.put('/:id/sales-crm-access', protect, authorize('superadmin'), async (req, res) => {
+  try {
+    const access = Boolean(req.body.access);
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { salesCrmAccess: access },
+      { new: true, runValidators: true },
+    ).select('name empId username role salesCrmAccess');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    await Audit.create({
+      user:     req.user._id,
+      userName: req.user.name,
+      action:   access ? 'Sales CRM Access Granted' : 'Sales CRM Access Revoked',
+      detail:   `${access ? 'Granted' : 'Revoked'} Sales CRM access for ${user.name}`,
+      ip:       req.ip,
+    });
+
+    res.json({ success: true, user });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // Who is allowed to reset whom. Shared by both reset routes so the rule lives
 // in one place. Returns { ok } or { ok:false, code, message }.
 //
