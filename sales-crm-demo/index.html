@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Al Quba — Sales CRM (Prototype)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Same token system as the Daily Logging CRM: dark ledger-terminal ground,
+     pink/magenta accent, IBM Plex Mono for numbers. Kept 1:1 so this reads
+     as the same product, not a different app bolted on. */
+  :root {
+    --bg-app:     #06080b;
+    --bg-sidebar: #0a0d12;
+    --bg-panel:   #10141a;
+    --bg-panel-2: #161b22;
+    --bg-raised:  #1d232b;
+    --bg-input:   #12161c;
+    --border:        #232a33;
+    --border-strong: #333c47;
+    --text-primary:   #eef1f3;
+    --text-secondary: #b7c0c9;
+    --text-muted:     #7c8994;
+    --text-faint:     #4d5861;
+    --accent:        #ff3d81;
+    --accent-dim:    #d92868;
+    --accent-bright: #ff6ba3;
+    --accent-wash:   rgba(255,61,129,.16);
+    --green:       #00d68f;  --green-wash:  rgba(0,214,143,.16);
+    --red:         #ff4d5e;  --red-wash:    rgba(255,77,94,.16);
+    --warn:        #ff9f1c;  --warn-wash:   rgba(255,159,28,.16);
+    --cyan:        #00e5ff;  --cyan-wash:   rgba(0,229,255,.16);
+    --violet:      #a742f5;  --violet-wash: rgba(167,66,245,.16);
+    --accent-ink: var(--accent-bright);
+    --green-ink: var(--green); --red-ink: var(--red); --warn-ink: var(--warn); --violet-ink: var(--violet); --cyan-ink: var(--cyan);
+    --radius-sm: 3px; --radius: 4px; --radius-lg: 6px; --radius-xl: 8px;
+    --shadow-md: 0 6px 20px rgba(0,0,0,.55);
+    --sidebar-w: 232px; --topbar-h: 56px;
+    --font: 'IBM Plex Sans','Inter','Segoe UI',system-ui,-apple-system,sans-serif;
+    --font-mono: 'IBM Plex Mono','JetBrains Mono','Fira Code',monospace;
+    --transition: .15s ease; --ease-out: cubic-bezier(.16,1,.3,1);
+    --sidebar-text:#eef1f3; --sidebar-text-muted:#7c8994; --sidebar-text-faint:#4d5861;
+    --sidebar-border:#232a33; --sidebar-hover:#161b22; --sidebar-danger:#ff5c6b;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{font-size:14px;-webkit-font-smoothing:antialiased}
+  body{font-family:var(--font);background:var(--bg-app);color:var(--text-primary);line-height:1.5}
+  html,body{max-width:100%;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}
+  button{font-family:inherit;cursor:pointer}
+  input,select,textarea{font-family:inherit}
+  img,svg{display:block}
+  ::-webkit-scrollbar{width:5px;height:5px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:99px}
+
+  .app{display:flex;min-height:100vh}
+  .sidebar{width:var(--sidebar-w);background:var(--bg-sidebar);border-right:1px solid var(--sidebar-border);
+    position:fixed;top:0;left:0;height:100vh;display:flex;flex-direction:column;z-index:100;overflow-y:auto}
+  .sb-logo{padding:18px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--sidebar-border)}
+  .sb-logo-mark{width:40px;height:40px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .sb-logo-mark img{width:100%;filter:brightness(1.55) saturate(1.15)}
+  .sb-logo-name{font-size:13px;font-weight:700;color:var(--sidebar-text);letter-spacing:-.02em;font-family:var(--font-mono)}
+  .sb-logo-sub{font-size:10px;color:var(--sidebar-text-faint);margin-top:1px;letter-spacing:.5px;text-transform:uppercase}
+  .sb-section{padding:16px 16px 4px;font-size:10px;font-weight:700;color:var(--sidebar-text-faint);text-transform:uppercase;letter-spacing:1px}
+  .sb-nav{flex:1;padding-bottom:8px}
+  .sb-item{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:1px 8px;border-radius:var(--radius-sm);
+    border-left:2px solid transparent;font-size:12.5px;font-weight:500;color:var(--sidebar-text-muted);cursor:pointer;
+    transition:background var(--transition),color var(--transition),border-color var(--transition);white-space:nowrap}
+  .sb-item:hover{background:var(--sidebar-hover);color:var(--sidebar-text)}
+  .sb-item.active{background:var(--accent-wash);color:var(--accent-bright);border-left-color:var(--accent)}
+  .sb-item svg{width:16px;height:16px;flex-shrink:0}
+  .sb-footer{padding:12px;border-top:1px solid var(--sidebar-border)}
+  .sb-user{display:flex;align-items:center;gap:9px}
+  .sb-uname{font-size:12px;font-weight:600;color:var(--sidebar-text)}
+  .sb-urole{font-size:10px;color:var(--sidebar-text-faint)}
+
+  .main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{background:var(--bg-panel);border-bottom:1px solid var(--border);height:var(--topbar-h);padding:0 24px;
+    display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+  .tb-title{font-size:15px;font-weight:700;color:var(--text-primary)}
+  .tb-date{font-size:11px;color:var(--text-muted);font-family:var(--font-mono)}
+  .tb-tag{font-size:10.5px;font-weight:700;color:var(--warn-ink);background:var(--warn-wash);border:1px solid var(--warn);
+    padding:3px 9px;border-radius:var(--radius-sm);text-transform:uppercase;letter-spacing:.04em}
+  .content{padding:24px;flex:1;min-width:0}
+  .page{display:none}
+  .page.active{display:block;animation:pageIn .2s var(--ease-out)}
+  @keyframes pageIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+  .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  .page-head h1{font-size:19px;font-weight:700}
+  .page-head p{font-size:12px;color:var(--text-muted);margin-top:3px;max-width:56ch}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 16px;border-radius:var(--radius);
+    font-size:13px;font-weight:600;border:none;outline:none;cursor:pointer;transition:all var(--transition);white-space:nowrap;line-height:1}
+  .btn svg{width:14px;height:14px;flex-shrink:0}
+  .btn-sm{padding:6px 12px;font-size:12px}
+  .btn-primary{background:var(--accent);color:#1a1200;font-weight:700}
+  .btn-primary:hover{background:var(--accent-bright);box-shadow:0 0 0 3px var(--accent-wash)}
+  .btn-secondary{background:var(--bg-panel-2);color:var(--text-secondary);border:1px solid var(--border)}
+  .btn-secondary:hover{background:var(--bg-raised);color:var(--text-primary)}
+  .btn:focus-visible,.sb-item:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .card{background:var(--bg-panel);border-radius:var(--radius-lg);border:1px solid var(--border);overflow:hidden}
+  .card-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  .card-title{font-size:13px;font-weight:700}
+  .card-subtitle{font-size:11px;color:var(--text-muted);margin-top:2px}
+  .card-body{padding:18px}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px}
+  .stat-card{background:var(--bg-panel);border-radius:var(--radius-lg);border:1px solid var(--border);padding:18px;position:relative;overflow:hidden}
+  .stat-card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+  .stat-blue::after{background:var(--accent)} .stat-green::after{background:var(--green)}
+  .stat-amber::after{background:var(--warn)} .stat-red::after{background:var(--red)}
+  .stat-label{font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+  .stat-value{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:26px;font-weight:700;line-height:1;letter-spacing:-.01em}
+  .stat-meta{font-size:11px;color:var(--text-muted);margin-top:5px}
+
+  .table-wrap{overflow-x:auto}
+  .tbl{width:100%;border-collapse:collapse}
+  .tbl th{background:var(--bg-panel-2);padding:9px 14px;font-size:10.5px;font-weight:700;color:var(--text-muted);text-align:left;
+    text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap}
+  .tbl td{padding:11px 14px;font-size:13px;color:var(--text-secondary);border-bottom:1px solid var(--border);vertical-align:middle;font-variant-numeric:tabular-nums}
+  .tbl tbody tr{transition:background var(--transition);cursor:pointer}
+  .tbl tbody tr:hover td{background:var(--bg-panel-2)}
+  .tbl tbody tr:last-child td{border-bottom:none}
+  .cell-main{font-weight:600;font-size:12px;color:var(--text-primary)}
+  .cell-sub{font-size:10.5px;color:var(--text-muted);margin-top:2px;font-family:var(--font-mono)}
+
+  .badge{display:inline-flex;align-items:center;padding:3px 9px 3px 7px;border-radius:var(--radius-sm);border-left:2px solid;
+    font-size:11px;font-weight:700;white-space:nowrap;gap:4px;font-family:var(--font-mono);letter-spacing:.02em}
+  .badge-blue{background:var(--accent-wash);color:var(--accent-ink);border-color:var(--accent)}
+  .badge-green{background:var(--green-wash);color:var(--green-ink);border-color:var(--green)}
+  .badge-red{background:var(--red-wash);color:var(--red-ink);border-color:var(--red)}
+  .badge-amber{background:var(--warn-wash);color:var(--warn-ink);border-color:var(--warn)}
+  .badge-grey{background:var(--bg-panel-2);color:var(--text-secondary);border-color:var(--border-strong)}
+
+  .av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#14181f;flex-shrink:0;font-size:11px;
+    background:linear-gradient(135deg,var(--accent),var(--accent-bright))}
+  .av-sm{width:26px;height:26px;font-size:10px}
+
+  /* ── Pipeline board ──────────────────────────────────────────── */
+  .board{display:grid;grid-auto-flow:column;grid-auto-columns:242px;gap:12px;overflow-x:auto;padding-bottom:6px}
+  .col{background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;display:flex;flex-direction:column;gap:8px}
+  .col-head{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 7px;border-bottom:2px solid var(--stage-color,var(--border))}
+  .col-head .name{font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+  .col-head .count{font-size:11px;color:var(--text-faint);font-weight:700;font-family:var(--font-mono)}
+  .col-sum{font-size:11px;color:var(--text-muted);padding:0 4px;font-family:var(--font-mono)}
+  .lead-card{background:var(--bg-panel-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 11px;cursor:pointer;transition:border-color var(--transition)}
+  .lead-card:hover{border-color:var(--accent-dim)}
+  .lead-card .top{display:flex;justify-content:space-between;gap:6px;align-items:flex-start}
+  .lead-card .lname{font-weight:700;font-size:13px;color:var(--text-primary)}
+  .lead-card .company{font-size:11.5px;color:var(--text-muted);margin-top:1px}
+  .lead-card .meta{display:flex;align-items:center;justify-content:space-between;margin-top:9px}
+  .lead-card .value{font-weight:700;font-size:12px;font-family:var(--font-mono);color:var(--text-primary)}
+  .lead-card .due{font-size:10.5px;margin-top:7px;padding-top:7px;border-top:1px dashed var(--border);color:var(--text-muted);font-family:var(--font-mono)}
+  .lead-card .due.today{color:var(--warn-ink)} .lead-card .due.overdue{color:var(--red-ink);font-weight:700}
+
+  .filters{display:flex;gap:8px;flex-wrap:wrap}
+  select,input[type="search"],input[type="text"],input[type="number"]{font:inherit;font-size:13px;border:1px solid var(--border);
+    background:var(--bg-input);color:var(--text-primary);border-radius:var(--radius);padding:8px 11px}
+  textarea{width:100%;font:inherit;font-size:13px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);
+    border-radius:var(--radius);padding:9px 11px;resize:vertical;min-height:54px}
+  label{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:5px}
+  .field{margin-bottom:14px}
+
+  .fu-groups{display:flex;flex-direction:column;gap:22px}
+  .fu-group h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px}
+  .fu-list{display:flex;flex-direction:column;gap:8px}
+  .fu-item{background:var(--bg-panel);border:1px solid var(--border);border-left:3px solid var(--stage-color,var(--border));
+    border-radius:var(--radius);padding:11px 14px;display:flex;align-items:center;gap:12px;cursor:pointer}
+  .fu-item .fu-name{font-weight:700;font-size:13px;color:var(--text-primary)}
+  .fu-item .fu-sub{font-size:11.5px;color:var(--text-muted);margin-top:1px}
+  .fu-item .fu-main{flex:1;min-width:0}
+
+  .rep-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}
+  .funnel-row{display:grid;grid-template-columns:86px 1fr 40px;align-items:center;gap:10px;margin-bottom:9px;font-size:12px}
+  .fbar-track{background:var(--bg-raised);border-radius:6px;height:18px;overflow:hidden}
+  .fbar{height:100%;border-radius:6px;background:var(--stage-color)}
+  .fval{text-align:right;font-weight:700;font-family:var(--font-mono)}
+  .rep-row{display:grid;grid-template-columns:26px 1fr 50px 40px;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px}
+  .rep-row:last-child{border-bottom:none}
+  .rbar-track{background:var(--bg-raised);border-radius:6px;height:7px;grid-column:1/-1;margin-top:3px}
+  .rbar{height:100%;border-radius:6px;background:var(--accent)}
+
+  .modal-backdrop{position:fixed;inset:0;background:rgba(3,4,6,.6);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .modal-backdrop[hidden]{display:none}
+  .modal{background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius-lg);width:100%;max-width:460px;max-height:86vh;overflow-y:auto;box-shadow:var(--shadow-md)}
+  .modal-hdr{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .modal-title{font-size:15px;font-weight:700}
+  .modal-sub{font-size:11.5px;color:var(--text-muted);margin-top:2px}
+  .modal-close{background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text-muted);width:28px;height:28px;border-radius:var(--radius-sm)}
+  .modal-close:hover{background:var(--red-wash);color:var(--red-ink)}
+  .modal-body{padding:18px}
+  .stage-select{display:flex;gap:6px;flex-wrap:wrap}
+  .stage-opt{appearance:none;border:1px solid var(--border);background:var(--bg-panel-2);color:var(--text-secondary);font:inherit;
+    font-size:11.5px;font-weight:700;padding:6px 10px;border-radius:99px;cursor:pointer}
+  .stage-opt.on{background:var(--stage-color);border-color:var(--stage-color);color:#0b0c0e}
+  .log-list{display:flex;flex-direction:column;gap:8px;margin-top:2px}
+  .log-item{background:var(--bg-panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:12px}
+  .log-item .lo-head{display:flex;justify-content:space-between;color:var(--text-muted);font-size:10.5px;margin-bottom:3px;font-family:var(--font-mono)}
+  .chip-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 16px}
+
+  .demo-banner{background:var(--warn-wash);border:1px solid var(--warn);color:var(--warn-ink);border-radius:var(--radius);
+    padding:9px 13px;font-size:12px;margin-bottom:20px;display:flex;gap:8px;align-items:center}
+
+  @media (max-width:640px){
+    .sidebar{transform:translateX(-100%)}
+    .main{margin-left:0}
+    .stat-grid{grid-template-columns:1fr 1fr}
+    .rep-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-mark"><img src="logo-alquba.png" alt=""></div>
+      <div>
+        <div class="sb-logo-name">Al Quba</div>
+        <div class="sb-logo-sub">Sales CRM</div>
+      </div>
+    </div>
+    <nav class="sb-nav" id="sbNav">
+      <div class="sb-section">Sales</div>
+      <div class="sb-item active" data-view="pipeline">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18.7 8 L13 13.7 9.5 10.2 5 14.7"/></svg>
+        Pipeline
+      </div>
+      <div class="sb-item" data-view="leads">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg>
+        Leads
+      </div>
+      <div class="sb-item" data-view="followups">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        Follow-ups
+      </div>
+      <div class="sb-item" data-view="reports">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18"/><rect x="5" y="11" width="3" height="7"/><rect x="11" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg>
+        Reports
+      </div>
+      <div class="sb-section">Daily Logging</div>
+      <div class="sb-item" style="opacity:.5;cursor:default" title="Separate app — not part of this prototype">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>
+        Tasks
+      </div>
+    </nav>
+    <div class="sb-footer">
+      <div class="sb-user">
+        <div class="av av-sm">SA</div>
+        <div>
+          <div class="sb-uname">Sanah Sulaiman</div>
+          <div class="sb-urole" style="font-family:var(--font-mono)">Sales Rep</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <div class="tb-title" id="pgTitle">Pipeline</div>
+        <div class="tb-date" id="tbDate"></div>
+      </div>
+      <span class="tb-tag">Prototype</span>
+    </header>
+
+    <main class="content">
+      <div class="demo-banner">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+        Sample data only — not connected to the real database. Click a lead to open it, change its stage, or log a call.
+      </div>
+
+      <!-- PIPELINE -->
+      <div class="page active" id="page-pipeline">
+        <div class="page-head">
+          <div><h1>Pipeline</h1><p>Every lead, grouped by where it sits in the sales process.</p></div>
+          <button class="btn btn-primary" id="newLeadBtn">+ New lead</button>
+        </div>
+        <div class="stat-grid" id="kpis"></div>
+        <div class="board" id="board"></div>
+      </div>
+
+      <!-- LEADS -->
+      <div class="page" id="page-leads">
+        <div class="page-head">
+          <div><h1>All leads</h1><p>Search and filter the full list.</p></div>
+          <div class="filters">
+            <input type="search" id="searchInput" placeholder="Search name or company…" style="min-width:200px">
+            <select id="stageFilter"><option value="">All stages</option></select>
+            <select id="repFilter"><option value="">All reps</option></select>
+          </div>
+        </div>
+        <div class="card"><div class="table-wrap">
+          <table class="tbl">
+            <thead><tr><th>Lead</th><th>Stage</th><th>Value</th><th>Rep</th><th>Source</th><th>Next follow-up</th></tr></thead>
+            <tbody id="leadsTableBody"></tbody>
+          </table>
+        </div></div>
+      </div>
+
+      <!-- FOLLOW-UPS -->
+      <div class="page" id="page-followups">
+        <div class="page-head"><div><h1>Follow-ups</h1><p>Calls and check-ins due, grouped by urgency.</p></div></div>
+        <div class="fu-groups" id="fuGroups"></div>
+      </div>
+
+      <!-- REPORTS -->
+      <div class="page" id="page-reports">
+        <div class="page-head"><div><h1>Sales performance</h1><p>Conversion through the funnel and activity by rep, this month.</p></div></div>
+        <div class="rep-grid">
+          <div class="card"><div class="card-header"><div><div class="card-title">Conversion funnel</div><div class="card-subtitle">Leads currently sitting at each stage</div></div></div>
+            <div class="card-body" id="funnel"></div></div>
+          <div class="card"><div class="card-header"><div><div class="card-title">Calls logged by rep</div><div class="card-subtitle">This month</div></div></div>
+            <div class="card-body" id="repCalls"></div></div>
+        </div>
+        <div class="stat-grid" style="margin-top:16px" id="reportKpis"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="overlay" hidden>
+  <div class="modal" id="sheet" role="dialog" aria-modal="true"></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+document.getElementById('tbDate').textContent = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+const STAGES = [
+  { id:'new',         label:'New',         color:'#7c8994' },
+  { id:'contacted',   label:'Contacted',   color:'#00e5ff' },
+  { id:'qualified',   label:'Qualified',   color:'#ff3d81' },
+  { id:'negotiation', label:'Negotiation', color:'#ff9f1c' },
+  { id:'won',         label:'Won',         color:'#00d68f' },
+  { id:'lost',        label:'Lost',        color:'#ff4d5e' },
+];
+const stageById = Object.fromEntries(STAGES.map(s=>[s.id,s]));
+const stageBadge = { new:'badge-grey', contacted:'badge-blue', qualified:'badge-amber', negotiation:'badge-amber', won:'badge-green', lost:'badge-red' };
+
+const REPS = [
+  { id:'sanah', name:'Sanah', manager:'Suhail Ahmed' }, { id:'rehan', name:'Rehan', manager:'Suhail Ahmed' },
+  { id:'fathima', name:'Fathima', manager:'Suhail Ahmed' }, { id:'basil', name:'Basil', manager:'Suhail Ahmed' },
+];
+const repById = Object.fromEntries(REPS.map(r=>[r.id,r]));
+// Simulated outbox for the "manager gets emailed when a follow-up goes overdue"
+// feature — nothing is actually sent from a static demo, this just makes the
+// behaviour visible so it can be shown to the team before it's built for real.
+let managerAlerts = [];
+function initials(name){ return name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase(); }
+
+const today = new Date(); today.setHours(0,0,0,0);
+function d(off){ const x=new Date(today); x.setDate(x.getDate()+off); return x.toISOString().slice(0,10); }
+
+let leads = [
+  { id:1,  name:'Hamdan Al Marri',   company:'Marri Holdings',       source:'Referral',   rep:'sanah',  stage:'negotiation', value:420000, due:d(0),  calls:[
+      {date:d(-6), outcome:'Connected', note:'Walked through the two-unit package, asked for a revised payment plan.'},
+      {date:d(-2), outcome:'Callback requested', note:'Wants to discuss with his partner before committing.'}] },
+  { id:2,  name:'Leena Haddad',      company:'Haddad Family Office', source:'Website',    rep:'rehan',  stage:'qualified',   value:260000, due:d(0),  calls:[
+      {date:d(-4), outcome:'Connected', note:'Interested in the waterfront plots, sending brochure.'}] },
+  { id:3,  name:'Omar Qureshi',      company:'Qureshi Textiles',     source:'Exhibition', rep:'basil',  stage:'contacted',   value:150000, due:d(1),  calls:[
+      {date:d(-1), outcome:'No answer', note:'Left voicemail, will try again tomorrow afternoon.'}] },
+  { id:4,  name:'Fatima Al Suwaidi', company:'Suwaidi Trading',      source:'Referral',   rep:'fathima',stage:'won',          value:510000, due:null,  calls:[
+      {date:d(-20), outcome:'Connected', note:'Site visit booked.'},
+      {date:d(-8),  outcome:'Connected', note:'Signed the agreement — payment received.'}] },
+  { id:5,  name:'Rashid Obaid',      company:'Obaid Logistics',      source:'Cold call',  rep:'sanah',  stage:'new',          value:95000,  due:d(-2), calls:[] },
+  { id:6,  name:'Priya Menon',       company:'Menon & Co.',          source:'Website',    rep:'rehan',  stage:'contacted',   value:180000, due:d(-1), calls:[
+      {date:d(-3), outcome:'Connected', note:'Needs financing details before she proceeds.'}] },
+  { id:7,  name:'Khalid Barakat',    company:'Barakat Builders',     source:'Referral',   rep:'basil',  stage:'negotiation', value:340000, due:d(2),  calls:[
+      {date:d(-5), outcome:'Connected', note:'Negotiating on the service charge.'}] },
+  { id:8,  name:'Aisha Noor',        company:'Noor Retail Group',    source:'Exhibition', rep:'fathima',stage:'qualified',   value:220000, due:d(3),  calls:[
+      {date:d(-2), outcome:'Connected', note:'Shortlisted two units, comparing with another developer.'}] },
+  { id:9,  name:'Tariq Jameel',      company:'Jameel Imports',       source:'Cold call',  rep:'sanah',  stage:'lost',         value:130000, due:null,  calls:[
+      {date:d(-15), outcome:'Not interested', note:'Went with a competitor on price.'}] },
+  { id:10, name:'Dana Khoury',       company:'Khoury Consulting',    source:'Website',    rep:'rehan',  stage:'new',          value:75000,  due:d(0),  calls:[] },
+  { id:11, name:'Mansour Saleh',     company:'Saleh Properties',     source:'Referral',   rep:'basil',  stage:'contacted',   value:265000, due:d(5),  calls:[
+      {date:d(-1), outcome:'Connected', note:'Wants a second viewing next week.'}] },
+  { id:12, name:'Grace Fernandes',   company:'Fernandes Exports',    source:'Website',    rep:'fathima',stage:'new',          value:60000,  due:d(-3), calls:[] },
+];
+
+const money = n => 'AED ' + n.toLocaleString('en-US');
+function fmtDate(iso){
+  if(!iso) return '—';
+  const diff = Math.round((new Date(iso) - today) / 86400000);
+  if(diff===0) return 'Today';
+  if(diff===1) return 'Tomorrow';
+  if(diff===-1) return 'Yesterday';
+  if(diff<0) return Math.abs(diff)+'d overdue';
+  return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+}
+function dueClass(iso){
+  if(!iso) return '';
+  const diff = Math.round((new Date(iso) - today) / 86400000);
+  if(diff<0) return 'overdue';
+  if(diff===0) return 'today';
+  return '';
+}
+
+// Fires once per lead the moment its follow-up deadline is crossed — mirrors
+// how a real backend job would check "is this now overdue?" and email the
+// rep's manager exactly once, not on every page view.
+function checkOverdueNotifications(){
+  leads.forEach(l=>{
+    if(l.due && dueClass(l.due)==='overdue' && !l.managerNotified){
+      l.managerNotified = true;
+      const rep = repById[l.rep];
+      managerAlerts.unshift({
+        to: rep.manager, rep: rep.name, lead: l.name, company: l.company,
+        due: l.due, sentAt: new Date().toISOString(),
+      });
+    }
+  });
+}
+
+// ── Nav ───────────────────────────────────────────────────────────────
+document.querySelectorAll('.sb-item[data-view]').forEach(item=>{
+  item.addEventListener('click', ()=>{
+    document.querySelectorAll('.sb-item[data-view]').forEach(x=>x.classList.remove('active'));
+    item.classList.add('active');
+    const view = item.dataset.view;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-'+view).classList.add('active');
+    document.getElementById('pgTitle').textContent = item.textContent.trim();
+    if(view==='leads') renderTable();
+    if(view==='followups') renderFollowups();
+    if(view==='reports') renderReports();
+  });
+});
+
+// ── KPIs ──────────────────────────────────────────────────────────────
+function renderKpis(){
+  const open = leads.filter(l=>l.stage!=='won'&&l.stage!=='lost');
+  const pipelineValue = open.reduce((s,l)=>s+l.value,0);
+  const won = leads.filter(l=>l.stage==='won');
+  const closedCount = leads.filter(l=>l.stage==='won'||l.stage==='lost').length;
+  const winRate = closedCount ? Math.round(won.length/closedCount*100) : 0;
+  const overdue = leads.filter(l=>l.due && dueClass(l.due)==='overdue').length;
+  const items = [
+    {cls:'stat-blue', label:'Open leads', value:open.length, sub:open.length+' in active stages'},
+    {cls:'stat-green', label:'Pipeline value', value:money(pipelineValue), sub:'across open deals'},
+    {cls:'stat-amber', label:'Win rate', value:winRate+'%', sub:won.length+' won of '+closedCount+' closed'},
+    {cls:'stat-red', label:'Overdue follow-ups', value:overdue, sub: overdue ? 'need attention' : 'all caught up'},
+  ];
+  document.getElementById('kpis').innerHTML = items.map(k=>
+    `<div class="stat-card ${k.cls}"><div class="stat-label">${k.label}</div><div class="stat-value">${k.value}</div><div class="stat-meta">${k.sub}</div></div>`
+  ).join('');
+}
+
+// ── Board ─────────────────────────────────────────────────────────────
+function renderBoard(){
+  const board = document.getElementById('board');
+  board.innerHTML = STAGES.map(st=>{
+    const items = leads.filter(l=>l.stage===st.id);
+    const sum = items.reduce((s,l)=>s+l.value,0);
+    const cards = items.map(l=>{
+      const rep = repById[l.rep]; const dc = dueClass(l.due);
+      return `<div class="lead-card" data-id="${l.id}">
+        <div class="top"><div><div class="lname">${l.name}</div><div class="company">${l.company}</div></div>
+          <span class="av av-sm">${initials(rep.name)}</span></div>
+        <div class="meta"><span class="value">${money(l.value)}</span></div>
+        ${l.due ? `<div class="due ${dc}">${fmtDate(l.due)}${l.managerNotified ? ' &middot; <span style="color:var(--red-ink)">&#9993; manager notified</span>' : ''}</div>` : ''}
+      </div>`;
+    }).join('') || '<div style="font-size:11.5px;color:var(--text-faint);padding:10px 4px">No leads here</div>';
+    return `<div class="col" style="--stage-color:${st.color}">
+      <div class="col-head"><span class="name">${st.label}</span><span class="count">${items.length}</span></div>
+      <div class="col-sum">${money(sum)}</div>
+      <div class="cards" style="display:flex;flex-direction:column;gap:8px">${cards}</div>
+    </div>`;
+  }).join('');
+  board.querySelectorAll('.lead-card').forEach(c=>c.addEventListener('click', ()=>openLead(Number(c.dataset.id))));
+}
+
+// ── Table ─────────────────────────────────────────────────────────────
+function populateFilters(){
+  document.getElementById('stageFilter').innerHTML = '<option value="">All stages</option>' + STAGES.map(s=>`<option value="${s.id}">${s.label}</option>`).join('');
+  document.getElementById('repFilter').innerHTML = '<option value="">All reps</option>' + REPS.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+}
+function renderTable(){
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const sf = document.getElementById('stageFilter').value;
+  const rf = document.getElementById('repFilter').value;
+  const rows = leads.filter(l=>{
+    if(sf && l.stage!==sf) return false;
+    if(rf && l.rep!==rf) return false;
+    if(q && !(l.name.toLowerCase().includes(q) || l.company.toLowerCase().includes(q))) return false;
+    return true;
+  });
+  document.getElementById('leadsTableBody').innerHTML = rows.map(l=>{
+    const st=stageById[l.stage]; const rep=repById[l.rep]; const dc=dueClass(l.due);
+    return `<tr data-id="${l.id}">
+      <td><div style="display:flex;align-items:center;gap:9px"><span class="av av-sm">${initials(rep.name)}</span>
+        <div><div class="cell-main">${l.name}</div><div class="cell-sub">${l.company}</div></div></div></td>
+      <td><span class="badge ${stageBadge[l.stage]}">${st.label}</span></td>
+      <td>${money(l.value)}</td>
+      <td>${rep.name}</td>
+      <td>${l.source}</td>
+      <td style="color:${dc==='overdue'?'var(--red-ink)':dc==='today'?'var(--warn-ink)':'inherit'}">${fmtDate(l.due)}${l.managerNotified ? ' <span title="Manager notified by email" style="color:var(--red-ink)">&#9993;</span>' : ''}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--text-faint);padding:24px">No leads match these filters</td></tr>`;
+  document.querySelectorAll('#leadsTableBody tr[data-id]').forEach(r=>r.addEventListener('click', ()=>openLead(Number(r.dataset.id))));
+}
+['searchInput','stageFilter','repFilter'].forEach(id=>document.getElementById(id).addEventListener('input', renderTable));
+
+// ── Follow-ups ────────────────────────────────────────────────────────
+function renderFollowups(){
+  const withDue = leads.filter(l=>l.due);
+  const groups = { overdue:[], today:[], upcoming:[] };
+  withDue.forEach(l=>{
+    const dc = dueClass(l.due);
+    if(dc==='overdue') groups.overdue.push(l); else if(dc==='today') groups.today.push(l); else groups.upcoming.push(l);
+  });
+  groups.upcoming.sort((a,b)=>a.due.localeCompare(b.due));
+  const badgeCls = {overdue:'badge-red', today:'badge-amber', '':'badge-grey'};
+  const section = (title,items,cls)=>{
+    if(!items.length) return '';
+    return `<div class="fu-group"><h3>${title} (${items.length})</h3><div class="fu-list">${
+      items.map(l=>{
+        const st=stageById[l.stage]; const rep=repById[l.rep];
+        return `<div class="fu-item" style="--stage-color:${st.color}" data-id="${l.id}">
+          <div class="fu-main"><div class="fu-name">${l.name} <span style="font-weight:400;color:var(--text-muted)">— ${l.company}</span></div>
+            <div class="fu-sub">${st.label} · ${rep.name} · ${money(l.value)}${l.managerNotified ? ` · <span style="color:var(--red-ink);font-weight:700">&#9993; ${rep.manager} notified</span>` : ''}</div></div>
+          <span class="badge ${badgeCls[cls]}">${fmtDate(l.due)}</span>
+        </div>`;
+      }).join('')
+    }</div></div>`;
+  };
+  const alertsCard = managerAlerts.length ? `<div class="fu-group">
+    <h3>Manager alerts sent (${managerAlerts.length})</h3>
+    <div class="card"><div class="card-body" style="display:flex;flex-direction:column;gap:8px">
+      ${managerAlerts.map(a=>`<div class="log-item">
+        <div class="lo-head"><span>To ${a.to}</span><span>${new Date(a.sentAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span></div>
+        <div><strong>${a.rep}</strong>'s follow-up with <strong>${a.lead}</strong> (${a.company}) is overdue — was due ${fmtDate(a.due)}.</div>
+      </div>`).join('')}
+    </div></div>
+  </div>` : '';
+
+  document.getElementById('fuGroups').innerHTML =
+    (section('Overdue', groups.overdue, 'overdue') + section('Due today', groups.today, 'today') + section('Upcoming', groups.upcoming, '') + alertsCard)
+    || '<p style="color:var(--text-faint)">Nothing scheduled.</p>';
+  document.querySelectorAll('#fuGroups .fu-item').forEach(it=>it.addEventListener('click', ()=>openLead(Number(it.dataset.id))));
+}
+
+// ── Reports ───────────────────────────────────────────────────────────
+function renderReports(){
+  const max = Math.max(...STAGES.map(s=>leads.filter(l=>l.stage===s.id).length), 1);
+  document.getElementById('funnel').innerHTML = STAGES.map(s=>{
+    const n = leads.filter(l=>l.stage===s.id).length;
+    const pct = Math.round(n/max*100);
+    return `<div class="funnel-row"><span>${s.label}</span>
+      <div class="fbar-track"><div class="fbar" style="width:${pct}%;--stage-color:${s.color}"></div></div>
+      <span class="fval">${n}</span></div>`;
+  }).join('');
+
+  const callCounts = REPS.map(r=>({rep:r, n: leads.reduce((s,l)=> s + (l.rep===r.id ? l.calls.length : 0), 0)}));
+  const maxCalls = Math.max(...callCounts.map(c=>c.n), 1);
+  document.getElementById('repCalls').innerHTML = callCounts.sort((a,b)=>b.n-a.n).map(c=>`
+    <div class="rep-row">
+      <span class="av av-sm">${initials(c.rep.name)}</span><span>${c.rep.name}</span>
+      <span style="text-align:right;font-family:var(--font-mono)">${c.n}</span>
+      <span style="font-size:10.5px;color:var(--text-faint)">calls</span>
+      <div class="rbar-track"><div class="rbar" style="width:${Math.round(c.n/maxCalls*100)}%"></div></div>
+    </div>`).join('');
+
+  const totalCalls = leads.reduce((s,l)=>s+l.calls.length,0);
+  const wonLeads = leads.filter(l=>l.stage==='won');
+  const avgDeal = Math.round(wonLeads.reduce((s,l)=>s+l.value,0) / Math.max(1,wonLeads.length));
+  document.getElementById('reportKpis').innerHTML = [
+    {cls:'stat-blue', label:'Total calls logged', value: totalCalls},
+    {cls:'stat-green', label:'Avg. won deal size', value: money(avgDeal||0)},
+    {cls:'stat-amber', label:'Active reps', value: REPS.length},
+    {cls:'stat-red', label:'Leads this month', value: leads.length},
+  ].map(k=>`<div class="stat-card ${k.cls}"><div class="stat-label">${k.label}</div><div class="stat-value">${k.value}</div></div>`).join('');
+}
+
+// ── Lead detail modal ─────────────────────────────────────────────────
+let activeId = null;
+function openLead(id){ activeId = id; renderSheet(); document.getElementById('overlay').hidden = false; }
+function closeSheet(){ document.getElementById('overlay').hidden = true; activeId = null; }
+document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeSheet(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeSheet(); });
+
+function renderSheet(){
+  const l = leads.find(x=>x.id===activeId);
+  if(!l) return;
+  const rep = repById[l.rep];
+  document.getElementById('sheet').innerHTML = `
+    <div class="modal-hdr">
+      <div><div class="modal-title">${l.name}</div><div class="modal-sub">${l.company} · ${l.source}</div></div>
+      <button class="modal-close" id="closeSheet" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="chip-row">
+        <span class="badge badge-grey">Rep: ${rep.name}</span>
+        <span class="badge badge-grey">${money(l.value)}</span>
+        ${l.due ? `<span class="badge ${dueClass(l.due)==='overdue'?'badge-red':dueClass(l.due)==='today'?'badge-amber':'badge-grey'}">Next: ${fmtDate(l.due)}</span>` : ''}
+        ${l.managerNotified ? `<span class="badge badge-red">&#9993; ${rep.manager} notified</span>` : ''}
+      </div>
+
+      <div class="field">
+        <label>Stage</label>
+        <div class="stage-select" id="stageSelect">
+          ${STAGES.map(s=>`<button class="stage-opt ${s.id===l.stage?'on':''}" style="--stage-color:${s.color}" data-stage="${s.id}">${s.label}</button>`).join('')}
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Log a call</label>
+        <textarea id="callNote" placeholder="What happened on the call…"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <select id="callOutcome" style="flex:1">
+            <option>Connected</option><option>No answer</option><option>Callback requested</option><option>Not interested</option>
+          </select>
+          <button class="btn btn-primary" id="logCallBtn">Log call</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>History (${l.calls.length})</label>
+        <div class="log-list">
+          ${l.calls.slice().reverse().map(c=>`<div class="log-item">
+            <div class="lo-head"><span>${new Date(c.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span><span>${c.outcome}</span></div>
+            <div>${c.note}</div>
+          </div>`).join('') || '<div style="font-size:11.5px;color:var(--text-faint)">No calls logged yet.</div>'}
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('closeSheet').addEventListener('click', closeSheet);
+  document.querySelectorAll('#stageSelect .stage-opt').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ l.stage = btn.dataset.stage; renderAll(); renderSheet(); });
+  });
+  document.getElementById('logCallBtn').addEventListener('click', ()=>{
+    const note = document.getElementById('callNote').value.trim();
+    const outcome = document.getElementById('callOutcome').value;
+    if(!note) return;
+    l.calls.push({date:new Date().toISOString().slice(0,10), outcome, note});
+    renderAll(); renderSheet();
+  });
+}
+
+function openNewLeadSheet(){
+  activeId = null;
+  document.getElementById('sheet').innerHTML = `
+    <div class="modal-hdr">
+      <div><div class="modal-title">New lead</div><div class="modal-sub">Add a lead to the pipeline</div></div>
+      <button class="modal-close" id="closeSheet" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>Name</label><input type="text" id="nlName" placeholder="Full name" style="width:100%"></div>
+      <div class="field"><label>Company</label><input type="text" id="nlCompany" placeholder="Company name" style="width:100%"></div>
+      <div class="field"><label>Rep</label><select id="nlRep" style="width:100%">${REPS.map(r=>`<option value="${r.id}">${r.name}</option>`).join('')}</select></div>
+      <div class="field"><label>Estimated value (AED)</label><input type="number" id="nlValue" placeholder="0" style="width:100%"></div>
+      <button class="btn btn-primary" id="nlSave" style="width:100%;justify-content:center">Add lead</button>
+    </div>
+  `;
+  document.getElementById('closeSheet').addEventListener('click', closeSheet);
+  document.getElementById('nlSave').addEventListener('click', ()=>{
+    const name = document.getElementById('nlName').value.trim();
+    if(!name) return;
+    const company = document.getElementById('nlCompany').value.trim() || '—';
+    const rep = document.getElementById('nlRep').value;
+    const value = Number(document.getElementById('nlValue').value) || 0;
+    const nid = Math.max(0,...leads.map(x=>x.id)) + 1;
+    leads.push({ id:nid, name, company, source:'Manual entry', rep, stage:'new', value, due:d(1), calls:[] });
+    closeSheet(); renderAll();
+  });
+  document.getElementById('overlay').hidden = false;
+}
+document.getElementById('newLeadBtn').addEventListener('click', openNewLeadSheet);
+
+function renderAll(){
+  checkOverdueNotifications();
+  renderKpis(); renderBoard();
+  if(document.getElementById('page-leads').classList.contains('active')) renderTable();
+  if(document.getElementById('page-followups').classList.contains('active')) renderFollowups();
+  if(document.getElementById('page-reports').classList.contains('active')) renderReports();
+}
+
+populateFilters();
+renderAll();
+})();
+</script>
+</body>
+</html>
