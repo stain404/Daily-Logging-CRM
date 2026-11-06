@@ -79,7 +79,7 @@ const PORT = process.env.PORT || 5000;
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(async () => {
-    console.log('✅  MongoDB connected');
+    console.log(`✅  MongoDB connected — db: "${mongoose.connection.name}", host: ${mongoose.connection.host}`);
     if (process.env.SEED_DB === 'true') {
       await seedDatabase();
     }
