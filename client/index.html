@@ -6433,6 +6433,15 @@ const SC = (() => {
   let view = 'pipeline';
   let activeLeadId = null;
 
+  // Visibility: the CEO sees the whole pipeline; everyone else — even once
+  // granted the page — only sees leads assigned to them. Matched off username
+  // against the sample reps above; a granted account that isn't one of the
+  // four sample reps (an admin, say) simply has no leads of their own yet.
+  const isCeo = () => CU?.role === 'superadmin';
+  const myRepId = () => (REPS.some(r => r.id === CU?.username) ? CU.username : null);
+  const visibleLeads = () => isCeo() ? leads : leads.filter(l => l.rep === myRepId());
+  const visibleReps = () => isCeo() ? REPS : REPS.filter(r => r.id === myRepId());
+
   const money = n => 'AED ' + n.toLocaleString('en-US');
   function fmtDate(iso) {
     if (!iso) return '—';
@@ -6467,12 +6476,13 @@ const SC = (() => {
   }
 
   function renderKpis() {
-    const open = leads.filter(l => l.stage !== 'won' && l.stage !== 'lost');
+    const mine = visibleLeads();
+    const open = mine.filter(l => l.stage !== 'won' && l.stage !== 'lost');
     const pipelineValue = open.reduce((s, l) => s + l.value, 0);
-    const won = leads.filter(l => l.stage === 'won');
-    const closedCount = leads.filter(l => l.stage === 'won' || l.stage === 'lost').length;
+    const won = mine.filter(l => l.stage === 'won');
+    const closedCount = mine.filter(l => l.stage === 'won' || l.stage === 'lost').length;
     const winRate = closedCount ? Math.round(won.length / closedCount * 100) : 0;
-    const overdue = leads.filter(l => l.due && dueClass(l.due) === 'overdue').length;
+    const overdue = mine.filter(l => l.due && dueClass(l.due) === 'overdue').length;
     const items = [
       { cls: 'stat-blue', label: 'Open leads', value: open.length, sub: open.length + ' in active stages' },
       { cls: 'stat-green', label: 'Pipeline value', value: money(pipelineValue), sub: 'across open deals' },
@@ -6485,8 +6495,9 @@ const SC = (() => {
   }
 
   function renderPipeline() {
+    const mine = visibleLeads();
     const cols = STAGES.map(st => {
-      const items = leads.filter(l => l.stage === st.id);
+      const items = mine.filter(l => l.stage === st.id);
       const sum = items.reduce((s, l) => s + l.value, 0);
       const cards = items.map(l => {
         const rep = repById[l.rep]; const dc = dueClass(l.due);
@@ -6511,9 +6522,11 @@ const SC = (() => {
   }
 
   function renderLeads() {
+    const mine = visibleLeads();
+    if (!mine.length) return '<p style="color:var(--text-faint)">No leads assigned to you yet.</p>';
     return `<div class="table-wrap">
       <table class="tbl"><thead><tr><th>Lead</th><th>Stage</th><th>Value</th><th>Rep</th><th>Source</th><th>Next follow-up</th></tr></thead>
-        <tbody>${leads.map(l => {
+        <tbody>${mine.map(l => {
           const st = stageById[l.stage]; const rep = repById[l.rep]; const dc = dueClass(l.due);
           return `<tr onclick="SC.openLead(${l.id})" style="cursor:pointer">
             <td><div style="display:flex;align-items:center;gap:9px"><span class="av av-sm">${initials(rep.name)}</span>
@@ -6529,7 +6542,7 @@ const SC = (() => {
 
   function renderFollowups() {
     checkOverdueNotifications();
-    const withDue = leads.filter(l => l.due);
+    const withDue = visibleLeads().filter(l => l.due);
     const groups = { overdue: [], today: [], upcoming: [] };
     withDue.forEach(l => { const dc = dueClass(l.due); (groups[dc === 'overdue' ? 'overdue' : dc === 'today' ? 'today' : 'upcoming']).push(l); });
     groups.upcoming.sort((a, b) => a.due.localeCompare(b.due));
@@ -6547,9 +6560,10 @@ const SC = (() => {
         }).join('')}
       </div>`;
     };
-    const alertsSection = managerAlerts.length ? `<div class="card">
-      <div class="card-header"><div class="card-title">Manager alerts sent (${managerAlerts.length})</div></div>
-      <div class="card-body">${managerAlerts.map(a => `<div class="sc-log-item">
+    const myAlerts = isCeo() ? managerAlerts : managerAlerts.filter(a => a.rep === repById[myRepId()]?.name);
+    const alertsSection = myAlerts.length ? `<div class="card">
+      <div class="card-header"><div class="card-title">Manager alerts sent (${myAlerts.length})</div></div>
+      <div class="card-body">${myAlerts.map(a => `<div class="sc-log-item">
         <div class="lo-head"><span>To ${esc(a.to)}</span><span>${new Date(a.sentAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span></div>
         <div><strong>${esc(a.rep)}</strong>'s follow-up with <strong>${esc(a.lead)}</strong> (${esc(a.company)}) is overdue — was due ${fmtDate(a.due)}.</div>
       </div>`).join('')}</div>
@@ -6559,15 +6573,17 @@ const SC = (() => {
   }
 
   function renderReports() {
-    const max = Math.max(...STAGES.map(s => leads.filter(l => l.stage === s.id).length), 1);
+    const mine = visibleLeads();
+    const reps = visibleReps();
+    const max = Math.max(...STAGES.map(s => mine.filter(l => l.stage === s.id).length), 1);
     const funnel = STAGES.map(s => {
-      const n = leads.filter(l => l.stage === s.id).length;
+      const n = mine.filter(l => l.stage === s.id).length;
       const pct = Math.round(n / max * 100);
       return `<div class="sc-funnel-row"><span>${s.label}</span>
         <div class="sc-fbar-track"><div class="sc-fbar" style="width:${pct}%;--stage-color:${s.color}"></div></div>
         <span style="text-align:right;font-weight:700;font-family:var(--font-mono)">${n}</span></div>`;
     }).join('');
-    const callCounts = REPS.map(r => ({ rep: r, n: leads.reduce((s, l) => s + (l.rep === r.id ? l.calls.length : 0), 0) }));
+    const callCounts = reps.map(r => ({ rep: r, n: mine.reduce((s, l) => s + (l.rep === r.id ? l.calls.length : 0), 0) }));
     const maxCalls = Math.max(...callCounts.map(c => c.n), 1);
     const repCalls = callCounts.sort((a, b) => b.n - a.n).map(c => `
       <div class="sc-rep-row">
@@ -6576,14 +6592,14 @@ const SC = (() => {
         <span style="font-size:10.5px;color:var(--text-faint)">calls</span>
         <div class="sc-rbar-track"><div class="sc-rbar" style="width:${Math.round(c.n / maxCalls * 100)}%"></div></div>
       </div>`).join('');
-    const totalCalls = leads.reduce((s, l) => s + l.calls.length, 0);
-    const wonLeads = leads.filter(l => l.stage === 'won');
+    const totalCalls = mine.reduce((s, l) => s + l.calls.length, 0);
+    const wonLeads = mine.filter(l => l.stage === 'won');
     const avgDeal = Math.round(wonLeads.reduce((s, l) => s + l.value, 0) / Math.max(1, wonLeads.length));
     const kpis = [
       { cls: 'stat-blue', label: 'Total calls logged', value: totalCalls },
       { cls: 'stat-green', label: 'Avg. won deal size', value: money(avgDeal || 0) },
-      { cls: 'stat-amber', label: 'Active reps', value: REPS.length },
-      { cls: 'stat-red', label: 'Leads this month', value: leads.length },
+      { cls: 'stat-amber', label: isCeo() ? 'Active reps' : 'Your leads', value: isCeo() ? reps.length : mine.length },
+      { cls: 'stat-red', label: 'Leads this month', value: mine.length },
     ].map(k => `<div class="stat-card ${k.cls}"><div class="stat-label">${k.label}</div><div class="stat-value">${k.value}</div></div>`).join('');
     return `<div class="g2">
         <div class="card"><div class="card-header"><div class="card-title">Conversion funnel</div><div class="card-subtitle">Leads currently sitting at each stage</div></div><div class="card-body">${funnel}</div></div>
@@ -6604,6 +6620,13 @@ const SC = (() => {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
         <span>Sample data only — not connected to the real database. Click a lead to open it, change its stage, or log a call.</span>
       </div>
+      <div class="mb" style="font-size:11.5px;color:var(--text-muted)">
+        ${isCeo()
+          ? '<strong style="color:var(--text-primary)">Company-wide view</strong> — you see every rep\'s leads.'
+          : myRepId()
+            ? `<strong style="color:var(--text-primary)">Your leads only</strong> — showing deals assigned to ${esc(repById[myRepId()].name)}. Only the CEO sees everyone's.`
+            : '<strong style="color:var(--text-primary)">No leads assigned to you</strong> — you have access but aren\'t one of the sample reps yet.'}
+      </div>
       ${tabs()}
       ${body}`;
   }
@@ -6613,9 +6636,9 @@ const SC = (() => {
   // Reuses the app's one global modal (openModal/closeModal, #overlay) rather
   // than building a second overlay — this page only ever needs one at a time.
   function openLead(id) {
+    const l = visibleLeads().find(x => x.id === id);
+    if (!l) return; // not visible to this user — nothing rendered links here anyway
     activeLeadId = id;
-    const l = leads.find(x => x.id === id);
-    if (!l) return;
     const rep = repById[l.rep];
     const bodyHtml = `
       <div style="font-size:11.5px;color:var(--text-muted);margin:-4px 0 14px">${esc(l.company)} &middot; ${esc(l.source)}</div>
@@ -6660,10 +6683,16 @@ const SC = (() => {
   }
 
   function openNewLead() {
+    // A rep can only ever create a lead for themselves — the field is locked,
+    // not just defaulted, so there is no dropdown to hand it to someone else.
+    const repField = isCeo()
+      ? `<select class="form-input" id="scNlRep">${REPS.map(r => `<option value="${r.id}">${r.name}</option>`).join('')}</select>`
+      : `<input class="form-input" id="scNlRep" value="${myRepId()}" type="hidden">
+         <div class="form-input" style="background:var(--bg-panel-2);color:var(--text-muted)">${esc(repById[myRepId()]?.name || CU.name)} (you)</div>`;
     const bodyHtml = `
       <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="scNlName" placeholder="Full name"></div>
       <div class="form-group"><label class="form-label">Company</label><input class="form-input" id="scNlCompany" placeholder="Company name"></div>
-      <div class="form-group"><label class="form-label">Rep</label><select class="form-input" id="scNlRep">${REPS.map(r => `<option value="${r.id}">${r.name}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Rep</label>${repField}</div>
       <div class="form-group"><label class="form-label">Estimated value (AED)</label><input class="form-input" type="number" id="scNlValue" placeholder="0"></div>`;
     openModal('New lead', bodyHtml, [{ label: 'Add lead', cls: 'btn-primary', fn: () => SC.saveNewLead() }], false);
   }
