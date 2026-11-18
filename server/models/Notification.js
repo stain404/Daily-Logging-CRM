@@ -10,7 +10,7 @@ const NotificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['assigned', 'submitted', 'reviewed', 'overdue', 'file-shared', 'change-request'],
+    enum: ['assigned', 'submitted', 'reviewed', 'overdue', 'file-shared', 'change-request', 'lead-reminder'],
     required: true,
   },
   title:   { type: String, required: true, trim: true },
@@ -18,6 +18,7 @@ const NotificationSchema = new mongoose.Schema({
 
   // What it's about, and who caused it
   task:  { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
+  lead:  { type: mongoose.Schema.Types.ObjectId, ref: 'Lead' },
   actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
   // The file a 'file-shared' notification is about. Without it, clicking one

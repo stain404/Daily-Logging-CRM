@@ -59,11 +59,19 @@ const UserSchema = new mongoose.Schema({
     emailTaskAssigned:  { type: Boolean, default: true },
     emailTaskSubmitted: { type: Boolean, default: true },
     emailTaskReviewed:  { type: Boolean, default: true },
+    emailLeadReminders: { type: Boolean, default: true },
   },
 
   // Set from an SES bounce/complaint notification. Stops us re-sending to a
   // dead address, which is what damages a sending domain's reputation.
   emailBounced: { type: Boolean, default: false },
+
+  // Sales CRM: a rep's own saved lead filters ("my overdue negotiations"),
+  // reapplied from the Leads page without retyping them each time.
+  savedLeadViews: [{
+    name:    { type: String, trim: true, required: true },
+    filters: { type: mongoose.Schema.Types.Mixed, default: {} },
+  }],
 }, { timestamps: true });
 
 // Hash password + auto-generate initials before save

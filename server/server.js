@@ -20,6 +20,7 @@ const notifRoutes  = require('./routes/notifications');
 const emailRoutes  = require('./routes/emails');
 const attachRoutes = require('./routes/attachments');
 const changeRoutes = require('./routes/changeRequests');
+const leadRoutes   = require('./routes/leads');
 
 const app = express();
 
@@ -62,6 +63,7 @@ app.use('/api/notifications', notifRoutes);
 app.use('/api/emails',      emailRoutes);
 app.use('/api/attachments', attachRoutes);
 app.use('/api/change-requests', changeRoutes);
+app.use('/api/leads',       leadRoutes);
 
 // ── Health check ──────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) =>
@@ -83,6 +85,7 @@ mongoose
     if (process.env.SEED_DB === 'true') {
       await seedDatabase();
     }
+    require('./services/leadReminders').start();
     app.listen(PORT, () =>
       console.log(`🚀  Server running on http://localhost:${PORT}`)
     );

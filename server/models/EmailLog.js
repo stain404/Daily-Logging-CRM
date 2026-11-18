@@ -16,11 +16,12 @@ const EmailLogSchema = new mongoose.Schema({
   // counterpart can be lined up when tracing an event.
   type: {
     type: String,
-    enum: ['assigned', 'submitted', 'reviewed', 'overdue'],
+    enum: ['assigned', 'submitted', 'reviewed', 'overdue', 'lead-reminder'],
     required: true,
   },
   subject: { type: String, default: '', trim: true },
   task:    { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
+  lead:    { type: mongoose.Schema.Types.ObjectId, ref: 'Lead' },
 
   status: {
     type: String,

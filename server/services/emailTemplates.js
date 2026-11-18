@@ -194,4 +194,46 @@ function taskReviewed({ task, reviewerName, url }) {
   });
 }
 
-module.exports = { taskAssigned, taskSubmitted, taskReviewed, dailyUpdate, BRAND, esc, fmtDate };
+// Sales CRM: a follow-up is coming up → the rep it's assigned to.
+function leadFollowUpReminder({ lead, followUp, recipientName, url }) {
+  return build({
+    subject:   `Follow-up due soon: ${lead.name}`,
+    heading:   'A follow-up is coming up',
+    introLine: `${recipientName ? recipientName.split(' ')[0] + ', y' : 'Y'}ou have a follow-up due soon.`,
+    rows: [
+      { label: 'Lead',    value: lead.name },
+      { label: 'Company', value: lead.company },
+      { label: 'Due',     value: fmtDate(followUp.scheduledFor) },
+      { label: 'Note',    value: followUp.note },
+      { label: 'Stage',   value: lead.stage },
+    ],
+    ctaLabel: 'Open lead',
+    ctaUrl:   url,
+    footerNote: `You are receiving this because this follow-up is assigned to you in ${BRAND.name}. You can turn these emails off in Settings.`,
+  });
+}
+
+// Sales CRM: a follow-up has gone overdue → the rep AND their manager.
+function leadFollowUpOverdue({ lead, followUp, recipientName, url }) {
+  return build({
+    subject:   `Overdue follow-up: ${lead.name}`,
+    heading:   'A follow-up is overdue',
+    introLine: `${recipientName ? recipientName.split(' ')[0] + ', t' : 'T'}he follow-up with ${lead.name} was due and has not been actioned.`,
+    rows: [
+      { label: 'Lead',    value: lead.name },
+      { label: 'Company', value: lead.company },
+      { label: 'Was due', value: fmtDate(followUp.scheduledFor) },
+      { label: 'Note',    value: followUp.note },
+      { label: 'Stage',   value: lead.stage },
+    ],
+    ctaLabel: 'Open lead',
+    ctaUrl:   url,
+    footerNote: `You are receiving this because you are assigned to or oversee this lead in ${BRAND.name}. Overdue follow-up alerts cannot be switched off.`,
+  });
+}
+
+module.exports = {
+  taskAssigned, taskSubmitted, taskReviewed, dailyUpdate,
+  leadFollowUpReminder, leadFollowUpOverdue,
+  BRAND, esc, fmtDate,
+};

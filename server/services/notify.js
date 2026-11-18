@@ -37,7 +37,7 @@ async function ceos() {
 // Failures are swallowed deliberately: a notification is never important
 // enough to fail the task write that triggered it. Same contract as the
 // audit logger in middleware/auth.js.
-async function notify(recipientIds, { type, title, message, task, attachment, actor, severity }) {
+async function notify(recipientIds, { type, title, message, task, lead, attachment, actor, severity }) {
   try {
     const actorStr = actor ? actor.toString() : null;
 
@@ -53,6 +53,7 @@ async function notify(recipientIds, { type, title, message, task, attachment, ac
       user, type, title,
       message:  message  || '',
       task:       task       || undefined,
+      lead:       lead       || undefined,
       attachment: attachment || undefined,
       actor:      actor      || undefined,
       severity: severity || 'info',
@@ -242,7 +243,59 @@ async function fileShared(attachment, actor, actorName) {
   });
 }
 
+// A follow-up is due soon (services/leadReminders.js runs the periodic check
+// that calls this). Goes to the rep alone — this is a reminder to act, not
+// yet an escalation.
+async function leadFollowUpDue(lead, followUp) {
+  const inApp = notify([lead.assignedTo], {
+    type: 'lead-reminder',
+    title: 'Follow-up due soon',
+    message: `Your follow-up with ${lead.name}${lead.company ? ` (${lead.company})` : ''} is due ${new Date(followUp.scheduledFor).toLocaleString()}.`,
+    lead: lead._id,
+    severity: 'info',
+  });
+
+  const email = mailer.sendToUsers([lead.assignedTo], null, {
+    type: 'lead-reminder',
+    lead,
+    render: ({ recipientName, url }) => templates.leadFollowUpReminder({
+      lead, followUp, recipientName, url,
+    }),
+  });
+
+  const [docs, emailedIds] = await Promise.all([inApp, email]);
+  return markEmailed(docs, emailedIds);
+}
+
+// A follow-up has gone overdue — escalate to the rep AND their manager, the
+// same pair the sample-data prototype simulated with its "manager alert"
+// banner, now actually sent.
+async function leadFollowUpOverdue(lead, followUp) {
+  const sups = await supervisorsOf(lead.assignedTo);
+  const recipients = [...new Set([String(lead.assignedTo), ...sups.map(String)])];
+
+  const inApp = notify(recipients, {
+    type: 'overdue',
+    title: 'Follow-up overdue',
+    message: `The follow-up with ${lead.name}${lead.company ? ` (${lead.company})` : ''} is overdue — was due ${new Date(followUp.scheduledFor).toLocaleString()}.`,
+    lead: lead._id,
+    severity: 'danger',
+  });
+
+  const email = mailer.sendToUsers(recipients, null, {
+    type: 'overdue',
+    lead,
+    render: ({ recipientName, url }) => templates.leadFollowUpOverdue({
+      lead, followUp, recipientName, url,
+    }),
+  });
+
+  const [docs, emailedIds] = await Promise.all([inApp, email]);
+  return markEmailed(docs, emailedIds);
+}
+
 module.exports = {
   notify, markEmailed, supervisorsOf, ceos,
   taskAssigned, taskSubmitted, taskReviewed, dailyUpdateSubmitted, fileShared,
+  leadFollowUpDue, leadFollowUpOverdue,
 };

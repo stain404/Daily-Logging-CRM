@@ -16,9 +16,12 @@ const APP_URL   = (process.env.APP_URL || '').replace(/\/+$/, '');
 
 // Which preference field governs which event.
 const PREF_KEY = {
-  assigned:  'emailTaskAssigned',
-  submitted: 'emailTaskSubmitted',
-  reviewed:  'emailTaskReviewed',
+  assigned:      'emailTaskAssigned',
+  submitted:     'emailTaskSubmitted',
+  reviewed:      'emailTaskReviewed',
+  'lead-reminder': 'emailLeadReminders',
+  // 'overdue' (lead follow-up escalation to rep + manager) has no pref key on
+  // purpose — see isMandatory below, it is never optional.
 };
 
 // Roles that cannot opt out of submission alerts. Enforced here rather than in
@@ -27,6 +30,7 @@ const PREF_KEY = {
 const REVIEW_ROLES = ['manager', 'admin', 'superadmin'];
 
 function isMandatory(user, type) {
+  if (type === 'overdue') return true;  // lead follow-up overdue — escalation, not a courtesy
   return type === 'submitted' && REVIEW_ROLES.includes(user.role);
 }
 
@@ -50,6 +54,11 @@ function sesClient() {
 function taskUrl(taskId) {
   if (!APP_URL || !taskId) return '';
   return `${APP_URL}/?task=${encodeURIComponent(taskId.toString())}`;
+}
+
+function leadUrl(leadId) {
+  if (!APP_URL || !leadId) return '';
+  return `${APP_URL}/?lead=${encodeURIComponent(leadId.toString())}`;
 }
 
 // Mongoose gives us ObjectIds, populated documents, or plain strings depending
@@ -78,7 +87,7 @@ async function log(entry) {
 // Never throws and never rejects. Callers sit on the task-write path, and the
 // contract there is the same one services/notify.js documents: a notification
 // is never important enough to fail the write that triggered it.
-async function sendToUser(userRef, { type, task, render }) {
+async function sendToUser(userRef, { type, task, lead, render }) {
   try {
     const userId = idOf(userRef);
     if (!userId) return;
@@ -87,7 +96,7 @@ async function sendToUser(userRef, { type, task, render }) {
       .select('name email role notificationPrefs emailBounced');
     if (!user) return;
 
-    const base = { user: user._id, type, task: idOf(task) || undefined };
+    const base = { user: user._id, type, task: idOf(task) || undefined, lead: idOf(lead) || undefined };
 
     // 1. No address. Common by design — User.email is sparse and optional.
     if (!user.email) {
@@ -109,7 +118,7 @@ async function sendToUser(userRef, { type, task, render }) {
     // Render only once we know we have a live recipient.
     const { subject, html, text } = render({
       recipientName: user.name,
-      url: taskUrl(idOf(task)),
+      url: lead ? leadUrl(idOf(lead)) : taskUrl(idOf(task)),
     });
 
     // 4. Dry run — compose and log, send nothing.
@@ -142,6 +151,7 @@ async function sendToUser(userRef, { type, task, render }) {
     return log({
       user: idOf(userRef) || undefined,
       task: idOf(task) || undefined,
+      lead: idOf(lead) || undefined,
       type,
       to: '',
       status: 'failed',
@@ -167,4 +177,4 @@ async function sendToUsers(userRefs, actorRef, opts) {
   return results.filter(r => r.status === 'sent').map(r => r.id);
 }
 
-module.exports = { sendToUser, sendToUsers, taskUrl, isMandatory, ENABLED, PREF_KEY, REVIEW_ROLES };
+module.exports = { sendToUser, sendToUsers, taskUrl, leadUrl, isMandatory, ENABLED, PREF_KEY, REVIEW_ROLES };
